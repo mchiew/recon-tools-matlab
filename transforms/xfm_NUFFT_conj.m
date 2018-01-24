@@ -129,7 +129,7 @@ function res = mtimes(a,b,idx)
         b(:,:,cc(:,2))  =   bsxfun(@times, b(:,:,cc(:,2)), a.w2(:,idx));
         for t = 1:nt
             res(:,:,:,t,cc(:,1))  =   nufft_adj(squeeze(b(:,t,cc(:,1))), st(t)).*conj(phs(:,:,:,t));
-            res(:,:,:,t,cc(:,2))  =   nufft_adj(squeeze(b(:,t,cc(:,2))), st(t)).*phs(:,:,:,t);
+            res(:,:,:,t,cc(:,2))  =   nufft_adj(squeeze(b(:,t,cc(:,2))), st2(t)).*phs(:,:,:,t);
         end
         res =   reshape(a.norm*(a.S2'*res), [], nt);
     else
