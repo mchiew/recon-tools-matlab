@@ -1,4 +1,4 @@
-classdef xfm_NUFFT < xfm
+classdef xfm_NUFFT_conj < xfm_NUFFT
 %   NUFFT Linear Operator
 %   Forward transforms images to multi-coil, arbitrary non-Cartesian k-space
 %   along with the adjoint (multi-coil k-space to combined image)
@@ -40,21 +40,19 @@ classdef xfm_NUFFT < xfm
 %               ".*" produces data in n-d  array form (Nx, Ny, Nz, Nt) 
 
 properties (SetAccess = private, GetAccess = public)
-    k       =   [];
-    w       =   [];
-    norm    =   1;
-    Jd      =   [6,6];
-    Kd      =   [];
-    shift   =   [];
-    st;
+    S2  =   [];
+    k2  =   [];
+    st2 =   [];
+    w2  =   [];
+    phs =   [];
 end
 
 methods
-function res = xfm_NUFFT(dims, coils, fieldmap_struct, k, varargin)
+function res = xfm_NUFFT_conj(dims, coils, fieldmap_struct, k, phs, varargin)
 
     %   Base class constructor
-    res =   res@xfm(dims, coils, fieldmap_struct);
-    
+    res =   res@xfm_NUFFT(dims, coils, fieldmap_struct, k, varargin{:});
+
     %   Parse remaining inputs
     p   =   inputParser;
 
@@ -71,40 +69,43 @@ function res = xfm_NUFFT(dims, coils, fieldmap_struct, k, varargin)
     p.parse(varargin{:});
     p   =   p.Results;
 
-    res.Jd      =   p.Jd;
-    res.Kd      =   p.Kd;
-    res.shift   =   p.shift;
+    %   Phase information
+    if isscalar(phs)
+        phs =   repmat(phs,1,1,1,res.Nt);
+    end
+    res.phs =   phs; 
 
-    res.k       =   k;
-    res.dsize   =   [size(k,1) res.Nt res.Nc];
+    %   Conjugate coils
+    res.S2  =   sensEncodingMatrix(cat(4,coils,conj(coils)));
+    res.Nc  =   res.S2.Nc;
+    res.dsize(3)    =   res.Nc;
 
-    disp('Initialising NUFFT(s)');
+    disp('Initialising conjugate NUFFT(s)');
     nd  =   (res.Nd(3) > 1) + 2;
     for t = res.Nt:-1:1
-        st(t)   =   nufft_init(squeeze(k(:, t, 1:nd)),...
+        st2(t)   =   nufft_init(-1*squeeze(k(:, t, 1:nd)),...
                                res.Nd(1:nd),...
                                p.Jd(1:nd),...
                                p.Kd(1:nd),...
                                p.shift(1:nd));
     end
-    res.st  =   st;
+    res.st2  =   st2;
     if isempty(p.wi)
     disp('Generating Density Compensation Weights');
     %   Use (Pipe 1999) fixed point method
         for t = 1:res.Nt
-            res.w(:,t)  =   ones(size(k,1),1);
+            res.w2(:,t)  =   ones(size(k,1),1);
             for ii = 1:10
-                tmp =   res.st(t).p*(res.st(t).p'*res.w(:,t));
-                res.w(:,t)  =   res.w(:,t)./real(tmp);
+                tmp =   res.st2(t).p*(res.st2(t).p'*res.w2(:,t));
+                res.w2(:,t)  =   res.w2(:,t)./real(tmp);
             end
         end
     elseif isscalar(p.wi)
-        res.w   =   repmat(p.wi, 1, res.Nt);
+        res.w2  =   repmat(p.wi, 1, res.Nt);
     else
-        res.w   =   reshape(p.wi, [], res.Nt);
+        res.w2  =   reshape(p.wi, [], res.Nt);
     end
-    res.w       =   sqrt(res.w);
-    res.norm    =   sqrt(res.st(1).sn(ceil(end/2),ceil(end/2),ceil(end/2))^(-2)/prod(res.st(1).Kd));
+    res.w2      =   sqrt(res.w2);
 
 end
 
@@ -117,23 +118,32 @@ function res = mtimes(a,b,idx)
     %   more than once is copied into the local scope first
     nt  =   length(idx);
     st  =   a.st(idx);
+    st2 =   a.st2(idx);
+    phs =   a.phs;
+    cc  =   reshape(1:a.Nc,[],2);
 
     if a.adjoint
     %   Adjoint NUFFT and coil transform
         res =   zeros([a.Nd, nt a.Nc]);
-        b   =   bsxfun(@times, b, a.w(:,idx));
+        b(:,:,cc(:,1))  =   bsxfun(@times, b(:,:,cc(:,1)), a.w(:,idx));
+        b(:,:,cc(:,2))  =   bsxfun(@times, b(:,:,cc(:,2)), a.w2(:,idx));
         for t = 1:nt
-            res(:,:,:,t,:)  =   nufft_adj(squeeze(b(:,t,:)), st(t));
+            res(:,:,:,t,cc(:,1))  =   nufft_adj(squeeze(b(:,t,cc(:,1))), st(t)).*conj(phs(:,:,:,t));
+            res(:,:,:,t,cc(:,2))  =   nufft_adj(squeeze(b(:,t,cc(:,2))), st(t)).*phs(:,:,:,t);
         end
-        res =   reshape(a.norm*(a.S'*res), [], nt);
+        res =   reshape(a.norm*(a.S2'*res), [], nt);
     else
     %   Forward NUFFT and coil transform
         res =   zeros([a.dsize(1) nt a.dsize(3)]);
-        tmp =   a.norm*(a.S*b);
+        tmp =   a.norm*(a.S2*b);
         for t = 1:nt
-            res(:,t,:)  =   nufft(squeeze(tmp(:,:,:,t,:)), st(t));
+            tmp(:,:,:,t,cc(:,1))    =   tmp(:,:,:,t,cc(:,1)).*phs(:,:,:,t);
+            res(:,t,cc(:,1))        =   nufft(squeeze(tmp(:,:,:,t,cc(:,1))), st(t));
+            tmp(:,:,:,t,cc(:,2))    =   tmp(:,:,:,t,cc(:,2)).*conj(phs(:,:,:,t));
+            res(:,t,cc(:,2))        =   nufft(squeeze(tmp(:,:,:,t,cc(:,2))), st2(t));
         end
-        res =   bsxfun(@times, res, a.w(:,idx));
+        res(:,:,cc(:,1))=   bsxfun(@times, res(:,:,cc(:,1)), a.w(:,idx));
+        res(:,:,cc(:,2))=   bsxfun(@times, res(:,:,cc(:,2)), a.w2(:,idx));
     end
 
 end
