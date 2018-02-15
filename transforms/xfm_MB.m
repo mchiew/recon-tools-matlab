@@ -124,5 +124,31 @@ function res = mean(a,b)
     res =   reshape(a.S'*ifftfn(a, res, 1:3), [], 1);
 end
 
+function g = gfactor(a,t)
+    if nargin < 2
+        t = 1;
+    end
+    
+    m1      =   fftshift(fftshift(a.mask(:,:,:,t),2),3);
+    sens    =   reshape(a.S.coils,[a.Nd(1:3) a.Nc]).*a.phs(:,:,:,t);
+    g       =   zeros(a.Nd(1:3));
+
+    for i = 1:a.Nd(1)
+        idx =   find(sens(i,:,:,1));
+        tmp =   zeros(length(idx));
+        [uu vv] = ind2sub(a.Nd(2:3),find(m1(i,:,:)));
+        [ii jj] = ind2sub(a.Nd(2:3),idx);
+        F   =   exp(-1j*2*pi*((ii-1)'.*(uu-1)/a.Nd(2)+(jj-1)'.*(vv-1)/a.Nd(3)))/prod(a.Nd(2:3));
+        s   =   reshape(sens(i,:,:,:),[],a.Nc);
+        s   =   s(idx,:);
+        for j = 1:length(idx)
+            tmp(:,j)=sum((F'*(s(j,:).*F(:,j))).*conj(s),2);
+        end
+        g(i,idx)    =   real(sqrt(diag(inv(tmp)).*diag(tmp)));
+    end
+
+    
+end
+
 end
 end

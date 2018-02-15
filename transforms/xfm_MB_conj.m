@@ -54,7 +54,7 @@ function res = xfm_MB_conj(dims, coils, fieldmap_struct, varargin)
     res =   res@xfm_MB(dims, [], fieldmap_struct, varargin{:});
 
     %   Conjugate coils
-    res.S2  =   sensEncodingMatrix(cat(4,coils,conj(coils)));
+    res.S2  =   sensEncodingMatrix(cat(4,coils,conj(coils))/sqrt(2));
     res.Nc  =   res.S2.Nc;
     res.dsize(2)    =   res.Nc;
 
@@ -129,6 +129,41 @@ function res = flip(a,b)
     end
     end
     res =   reshape(cat(3, b, res), [], a.Nc, a.Ns);
+end
+
+function g = gfactor(a,t)
+    if nargin < 2
+        t = 1;
+    end
+
+    m1      =   fftshift(fftshift(a.mask2(:,:,:,t,1,1),2),3);
+    m2      =   fftshift(fftshift(a.mask2(:,:,:,t,1,2),2),3);
+    sens    =   reshape(a.S2.coils,[a.Nd(1:3) a.Nc]);
+    c1      =   1:a.Nc/2;
+    c2      =   a.Nc/2+1:a.Nc;
+    sens(:,:,:,c1) = sens(:,:,:,c1).*a.phs(:,:,:,t);
+    sens(:,:,:,c2) = sens(:,:,:,c2).*conj(a.phs(:,:,:,t));
+    g       =   zeros(a.Nd(1:3));
+
+    for i = 1:a.Nd(1)
+        idx =   find(sens(i,:,:,1));
+        tmp =   zeros(length(idx));
+        [uu1 vv1] = ind2sub(a.Nd(2:3),find(m1(i,:,:)));
+        [uu2 vv2] = ind2sub(a.Nd(2:3),find(m2(i,:,:)));
+        [ii jj] = ind2sub(a.Nd(2:3),idx);
+        F1  =   exp(-1j*2*pi*((ii-1)'.*(uu1-1)/a.Nd(2)+(jj-1)'.*(vv1-1)/a.Nd(3)))/prod(a.Nd(2:3));
+        F2  =   exp(-1j*2*pi*((ii-1)'.*(uu2-1)/a.Nd(2)+(jj-1)'.*(vv2-1)/a.Nd(3)))/prod(a.Nd(2:3));
+        s1  =   reshape(sens(i,:,:,c1),[],a.Nc/2);
+        s1  =   s1(idx,:);
+        s2  =   reshape(sens(i,:,:,c2),[],a.Nc/2);
+        s2  =   s2(idx,:);
+        for j = 1:length(idx)
+            tmp(:,j)    =   sum((F1'*(s1(j,:).*F1(:,j))).*conj(s1),2) + sum((F2'*(s2(j,:).*F2(:,j))).*conj(s2),2);
+        end
+        g(i,idx)    =   real(sqrt(diag(inv(tmp)).*diag(tmp)));
+    end
+
+    
 end
 
 end
