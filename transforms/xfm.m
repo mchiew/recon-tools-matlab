@@ -47,7 +47,7 @@ function res = ctranspose(a)
 end
 
 function step = max_step(xfm)
-    step    =   norm(ones(xfm.msize))/norm(xfm'*(xfm*ones(xfm.msize)));
+    step    =   norm(ones(xfm.msize(1),1))/norm(mtimes(xfm',mtimes(xfm,ones(xfm.msize(1),1),1),1));
 end
 
 function est = cg(xfm, d, tol, iters)
