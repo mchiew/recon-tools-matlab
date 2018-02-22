@@ -39,7 +39,7 @@ classdef xfm_NUFFT < xfm
 %               "*" produces data that is in matrix form (Nx*Ny*Nz, Nt) whereas
 %               ".*" produces data in n-d  array form (Nx, Ny, Nz, Nt) 
 
-properties (SetAccess = private, GetAccess = public)
+properties (SetAccess = protected, GetAccess = public)
     k       =   [];
     w       =   [];
     norm    =   1;
@@ -93,11 +93,16 @@ function res = xfm_NUFFT(dims, coils, fieldmap_struct, k, varargin)
     %   Use (Pipe 1999) fixed point method
         for t = 1:res.Nt
             res.w(:,t)  =   ones(size(k,1),1);
-            for ii = 1:10
-                tmp =   res.st(t).p*(res.st(t).p'*res.w(:,t));
-                res.w(:,t)  =   res.w(:,t)./real(tmp);
+            for ii = 1:5
+                res.w(:,t)  =   res.w(:,t)./real(res.st(t).p*(res.st(t).p'*res.w(:,t)));
             end
         end
+    elseif p.wi == 0
+        w   =   ones(size(k,1),1);
+        for ii = 1:5
+            w  =   w./real(res.st(t).p*(res.st(t).p'*w));
+        end
+        res.w = repmat(w,1,res.Nt);
     elseif isscalar(p.wi)
         res.w   =   repmat(p.wi, 1, res.Nt);
     else
@@ -106,8 +111,58 @@ function res = xfm_NUFFT(dims, coils, fieldmap_struct, k, varargin)
     res.w       =   sqrt(res.w);
     res.norm    =   sqrt(res.st(1).sn(ceil(end/2),ceil(end/2),ceil(end/2))^(-2)/prod(res.st(1).Kd));
 
+
 end
 
+function res = calcToeplitzEmbedding(a,idx)
+    %   Right now assumes square 2D matrix
+    %   Will generalise later....
+    %   Computes first column of the block-circulant embedding for the block toeplitz A'A
+    %   Need to use NUFFT twice to get 2 columns of A'A to do this
+    %   A'A is conjugate symmetric, but within toeplitz blocks are NOT symmetric
+    %
+    %   First compute circulant embeddings for each Toeplitz block
+    %   Then compute block-circulant embedding across blocks
+
+    disp('Computing Toeplitz Embedding')
+    if nargin < 3
+        idx =   1:a.Nt;
+    end
+    N   =   sqrt(a.msize(1));
+    Nt  =   length(idx);
+    x   =   zeros(2*N,N,Nt);
+    tmp =   zeros(N);
+    tmp(1,1)    =   1;
+    st  =   a.st(idx);
+    w   =   a.w.^2;
+    for t = 1:Nt
+        x(1:N,:,t)  =   nufft_adj(w(:,t).*nufft(tmp, st(t)), st(t));
+    end
+    tmp([1 N],1)    =   [0;1];
+    for t = 1:Nt
+        x([N+2:end N+1],:,t)  =   nufft_adj(w(:,t).*nufft(tmp, st(t)), st(t));
+    end
+    x(N+1,:,:)  =   0;
+    clear tmp;
+    
+    res =   zeros(4*N^2,Nt);
+    res(1:2*N^2,:)  =   reshape(x,[],Nt);
+    res(2*N^2+2*N+1:end,:)  =   conj(reshape(x([1 end:-1:2],end:-1:2,:),[],Nt));
+
+    res     =   fft2(reshape(res,2*N,2*N,[]))*a.norm^2;
+end
+
+function res = mtimes_Toeplitz(a,T,b)
+    dim =   size(b);
+    Nt  =   size(T,3);
+    b   =   reshape(a.S*b,[a.Nd(1:2) Nt a.Nc]);
+    res =   zeros(dim);
+    for t = 1:Nt
+        tmp         =   ifft2(T(:,:,t).*fft2(b(:,:,t,:),2*a.Nd(1),2*a.Nd(2))); 
+        res(:,t)    =   reshape(a.S'*tmp(1:a.Nd(1),1:a.Nd(2),1,:),[],1);
+    end
+    %res =   reshape(a.S'*res,dim);
+end
 
 function res = mtimes(a,b,idx)
     if nargin < 3
