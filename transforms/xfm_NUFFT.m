@@ -123,6 +123,102 @@ function res = calcToeplitzEmbedding(a,idx)
     %
     %   First compute circulant embeddings for each Toeplitz block
     %   Then compute block-circulant embedding across blocks
+    %
+    %   Here's a 2D, 2x2 example
+    %
+    %   Block Toeplitz T=A'A 4x4 matrix (2x2 blocks of 2x2):
+    %
+    %                               a b'| c'd'
+    %                               b a | e'c'
+    %                               --- + ---
+    %                               c e | a b' 
+    %                               d c | b a
+    %
+    %   Note this matrix is globally conjugate symmetric, and the block structure is also,
+    %   but within each block they are not (at least not for the off-diagonal blocks)
+    %   
+    %   To get all the degrees of freedom, we need the first column and Nth column (where N
+    %   is one of the dimensions. i.e., we need the first and last column of a column-block
+    %
+    %   This are easily estimated from A'A*[1;0;0;0] and A'A*[0;1;0;0]
+    %
+    %   Now we want to construct the first column of the block circulant embedding:
+    %   The block circulant embedding C is constructed by first embedding each block within
+    %   its circulant embedding (we use 0 for the arbitrary point):
+    %
+    %                               a b'0 b | c'd'0 e'
+    %                               b a b'0 | e'c'd'0
+    %                               0 b a b'| 0 e'c'd'
+    %                               b'0 b a | d'0 e'c'
+    %                               ------- + -------
+    %                               c e 0 d | a b'0 b
+    %                               d c e 0 | b a b'0
+    %                               0 d c e | 0 b a b'
+    %                               e 0 d c | b'0 b a
+    %                               
+    %   and then constructing the block-level embedding:
+    %
+    %                               a b'0 b | c'd'0 e'| 0 0 0 0 | c e 0 d
+    %                               b a b'0 | e'c'd'0 | 0 0 0 0 | d c e 0
+    %                               0 b a b'| 0 e'c'd'| 0 0 0 0 | 0 d c e
+    %                               b'0 b a | d'0 e'c'| 0 0 0 0 | e 0 d c
+    %                               ------- + ------- + ------- + -------
+    %                               c e 0 d | a b'0 b | c'd'0 e | 0 0 0 0
+    %                               d c e 0 | b a b'0 | e'c'd'0 | 0 0 0 0
+    %                               0 d c e | 0 b a b'| 0 e'c'd | 0 0 0 0
+    %                               e 0 d c | b'0 b a | d'0 e'c | 0 0 0 0
+    %                               ------- + ------- + ------- + -------
+    %                               0 0 0 0 | c e 0 d | a b'0 b | c'd'0 e
+    %                               0 0 0 0 | d c e 0 | b a b'0 | e'c'd'0
+    %                               0 0 0 0 | 0 d c e | 0 b a b'| 0 e'c'd
+    %                               0 0 0 0 | e 0 d c | b'0 b a | d'0 e'c
+    %                               ------- + ------- + ------- + -------
+    %                               c'd'0 e'| 0 0 0 0 | c e 0 d | a b'0 b 
+    %                               e'c'd'0 | 0 0 0 0 | d c e 0 | b a b'0 
+    %                               0 e'c'd'| 0 0 0 0 | 0 d c e | 0 b a b'
+    %                               d'0 e'c'| 0 0 0 0 | e 0 d c | b'0 b a 
+    %
+    %   In general, for an NxN image, we get an N^2 x N^2 Block-Toeplitz matrix (NxN blocks of NxN),
+    %   and the circulant embedding is (2^d)N^2 x (2^d)N^2, where d=dimension (2 in this case)
+    %   so that the total dimension is 4N^2 x 4N^2
+    %
+    %   Multiplication by this block-circulant matrix is completely characterised by its first column
+    %   That is, the diagonalisation C = F*DF, where F are DFTs (where we can use FFT for O(N log N) 
+    %   multiplication rather than O(N^2), and diag(D) = FFT(C(:,1))
+    %   Intuitively, consider that circulant matrices perform circular convolutions, so that appealing
+    %   to the Fourier convolution theorem, we can simply perform FFTs, point-wise multiply, and iFFT back
+    %
+    %   Because the upper left 
+    %
+    %   Practically, the first column of C is completely determined by the two columns of A'A we extracted
+    %   Then C(:,1) should be reshaped into an 2Nx2N PSF tensor:
+    %
+    %                               a 
+    %                               b
+    %                               0
+    %                               b
+    %                               c   
+    %                               d     a c 0 c'
+    %                               0     b d 0 e'
+    %                               e  =  0 0 0 0
+    %                               0     b'e 0 d'
+    %                               0    
+    %                               0    
+    %                               0
+    %                               c
+    %                               e
+    %                               0
+    %                               d
+    %
+    %   While we don't FFTshift in practice, shifting this 2D tensor makes its nature as a PSF more evident:
+    %   
+    %                                   0 0 0 0 
+    %                                   0 d'b'e
+    %                                   0 c'a c
+    %                                   0'e'b d
+    %                           
+    %   Once constructed, then A'A*x can be computed via iFFT(FFT(PSF).*FFT(padarray(x)))
+    %   This greatly speeds up computation of A'Ax, from O(N^2) to O(N log N)
 
     disp('Computing Toeplitz Embedding')
     if nargin < 3
@@ -152,16 +248,18 @@ function res = calcToeplitzEmbedding(a,idx)
     res     =   fft2(reshape(res,2*N,2*N,[]))*a.norm^2;
 end
 
-function res = mtimes_Toeplitz(a,T,b)
-    dim =   size(b);
+function b = mtimes_Toeplitz(a,T,b)
     Nt  =   size(T,3);
-    b   =   reshape(a.S*b,[a.Nd(1:2) Nt a.Nc]);
-    res =   zeros(dim);
+    Nd  =   a.Nd(1:2);
+    S   =   a.S;
+    b   =   reshape(b,[],Nt);
+    tmp =   zeros(2*Nd(1),2*Nd(2),1,1,a.Nc);
+    tmp2=   zeros(2*Nd(1),2*Nd(2),1,1,a.Nc);
     for t = 1:Nt
-        tmp         =   ifft2(T(:,:,t).*fft2(b(:,:,t,:),2*a.Nd(1),2*a.Nd(2))); 
-        res(:,t)    =   reshape(a.S'*tmp(1:a.Nd(1),1:a.Nd(2),1,:),[],1);
+        tmp(1:Nd(1),1:Nd(2),1,1,:)  =  S*b(:,t); 
+        tmp2    =   ifft2(T(:,:,t).*fft2(tmp)); 
+        b(:,t)  =   reshape(S'*tmp2(1:Nd(1),1:Nd(2),1,1,:),[],1);
     end
-    %res =   reshape(a.S'*res,dim);
 end
 
 function res = mtimes(a,b,idx)
