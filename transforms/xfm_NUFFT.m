@@ -221,7 +221,7 @@ function res = calcToeplitzEmbedding(a,idx)
     %   This greatly speeds up computation of A'Ax, from O(N^2) to O(N log N)
 
     disp('Computing Toeplitz Embedding')
-    if nargin < 3
+    if nargin < 2
         idx =   1:a.Nt;
     end
     N   =   sqrt(a.msize(1));
