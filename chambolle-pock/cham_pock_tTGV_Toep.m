@@ -1,4 +1,4 @@
-function res = cham_pock_TGV_Toep(d, xfm, T, niter, lambda)
+function res = cham_pock_tTGV_Toep(d, xfm, T, niter, lambda, plt_fn, u)
 
 %   Mark Chiew
 %   Feb 2018
@@ -15,8 +15,15 @@ function res = cham_pock_TGV_Toep(d, xfm, T, niter, lambda)
 %   for evaluation of xfm'*xfm
 
 %   Initialise
+if nargin < 6
+plt_fn = [];
+end
+if nargin < 7
 u   =   zeros(xfm.msize,'single');
 uu  =   zeros(xfm.msize,'single');
+else
+uu  =   u;
+end
 v   =   zeros(xfm.msize,'single');
 vv  =   zeros(xfm.msize,'single');
 p   =   zeros(xfm.msize,'single');
@@ -33,7 +40,7 @@ min_update  =   1E-4;
 
 fprintf(1, '%-5s %-16s\n', 'iter','rel. update');
 for i = 1:niter
-    p   =   proj(p + s*(grad(2*u-uu) - (2*v-vv)), a1);
+    p   =   proj(p + s*(pgrad(2*u-uu) - (2*v-vv)), a1);
     q   =   proj(q + s*symgrad(2*v-vv), a0);
     r2  =   prox(r2 - s*d + s*mtimes_Toeplitz(xfm, T, 2*u-uu), s, lambda); 
 
@@ -42,9 +49,11 @@ for i = 1:niter
     vv  =   v;
     v   =   v + t*(p + symdiv(q));
 
-    f(100);
-    show(abs(u(:,1)),[0 1E-4],'colormap',gray);
-    update = norm(u-uu)/norm(uu);
+    if isa(plt_fn, 'function_handle')
+        plt_fn(u);
+    end
+
+    update = norm(u(:)-uu(:))/norm(uu(:));
     fprintf(1, '%-5d %-16G\n', i, update);
     if update < min_update
         break;
@@ -60,12 +69,44 @@ function x = proj(x,z)
     x = x./max(1,abs(x)/z);
 end
 
-function x = grad(x)
+function x = pgrad(x)
+%   Use the definition in Bredies et al.
+%
+%   Example 4x4 forward difference operator:
+%   -1  1  0  0
+%    0 -1  1  0
+%    0  0 -1  1
+%    0  0  0  0
+    %x = [diff(x,1,2) zeros(size(x,1),1)];
+
+%   Different boundary conditions
+%    1  0  0 -1
+%   -1  1  0  0
+%    0 -1  1  0
+%    0  0 -1  1
     x = diff([x(:,end) x],1,2);
 end
 
+function x = ngrad(x)
+%   Use the definition in Bredies et al.
+%   This is also the -adjoint of the pgrad operator
+%   Example 4x4 reverse difference operator:
+%    1  0  0  0
+%   -1  1  0  0
+%    0 -1  1  0
+%    0  0 -1  0
+    %x = [x(:,1) diff(x(:,1:end-1),1,2) -x(:,end-1)];
+
+%   -1  1  0  0
+%    0 -1  1  0
+%    0  0 -1  1
+%    1  0  0 -1
+    x = [diff(x,1,2) x(:,1)-x(:,end)];
+end
+
 function x = symgrad(x)
-    x = 0.5*diff([x(:,end) x],1,2) + 0.5*diff([x x(:,1)],1,2);
+    %x = 0.5*pgrad(x) + 0.5*ngrad(x);
+    x = pgrad(x);
 end
 
 function x = prox(x,s,lambda) 
@@ -73,9 +114,10 @@ function x = prox(x,s,lambda)
 end
 
 function x = div(x)
-    x = diff([x x(:,1)],1,2);
+    x = ngrad(x);
 end
 
 function x = symdiv(x)
-    x   =   symgrad(x);
+    %x   =   symgrad(x);
+    x = ngrad(x);
 end

@@ -1,4 +1,4 @@
-function u = cham_pock_TGV(d, xfm, niter, lambda)
+function u = cham_pock_tTGV(d, xfm, niter, lambda, u)
 
 %   Mark Chiew
 %   Feb 2018
@@ -12,8 +12,12 @@ function u = cham_pock_TGV(d, xfm, niter, lambda)
 %   i.e., bigger lambda means more relative TGV weighting
 
 %   Initialise
+if nargin < 5
 u   =   zeros(xfm.msize,'single');
 uu  =   zeros(xfm.msize,'single');
+else
+uu  =   u;
+end
 v   =   zeros(xfm.msize,'single');
 vv  =   zeros(xfm.msize,'single');
 p   =   zeros(xfm.msize,'single');
@@ -38,7 +42,7 @@ for i = 1:niter
     vv  =   v;
     v   =   v + t*(p + symdiv(q));
 
-    update = norm(u-uu)/norm(uu);
+    update = norm(u(:)-uu(:))/norm(uu(:));
     fprintf(1, '%-5d %-16G\n', i, update);
     if update < min_update
         break;
