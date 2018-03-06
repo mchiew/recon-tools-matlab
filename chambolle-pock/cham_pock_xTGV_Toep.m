@@ -31,8 +31,8 @@ q   =   zeros([xfm.Nd(1:2) xfm.Nt 3],'single');
 r2  =   zeros([xfm.Nd(1:2) xfm.Nt],'single');
 d   =   reshape(xfm'*d, [xfm.Nd(1:2) xfm.Nt]);
 
-t   =   1/sqrt(12);
-s   =   1/sqrt(12);
+t   =   1/sqrt(abs(T(1,1)));
+s   =   1/sqrt(abs(T(1,1)));
 a1  =   1;
 a0  =   2;
 

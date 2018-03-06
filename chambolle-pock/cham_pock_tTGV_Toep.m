@@ -31,8 +31,8 @@ q   =   zeros(xfm.msize,'single');
 r2  =   zeros(xfm.msize,'single');
 d   =   xfm'*d;
 
-t   =   1/sqrt(12);
-s   =   1/sqrt(12);
+t   =   1/sqrt(abs(T(1,1)));
+s   =   1/sqrt(abs(T(1,1)));
 a1  =   1;
 a0  =   2;
 
