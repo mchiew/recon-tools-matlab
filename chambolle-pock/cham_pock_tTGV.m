@@ -1,4 +1,4 @@
-function u = cham_pock_tTGV(d, xfm, niter, lambda, u)
+function u = cham_pock_tTGV(d, xfm, niter, lambda, tol, u)
 
 %   Mark Chiew
 %   Feb 2018
@@ -13,6 +13,9 @@ function u = cham_pock_tTGV(d, xfm, niter, lambda, u)
 
 %   Initialise
 if nargin < 5
+tol =   1E-4;
+end
+if nargin < 6
 u   =   zeros(xfm.msize,'single');
 uu  =   zeros(xfm.msize,'single');
 else
@@ -29,8 +32,6 @@ s   =   1/sqrt(12);
 a1  =   1;
 a0  =   2;
 
-min_update  =   1E-4;
-
 fprintf(1, '%-5s %-16s\n', 'iter','rel. update');
 for i = 1:niter
     p   =   proj(p + s*(grad(2*u-uu) - (2*v-vv)), a1);
@@ -44,7 +45,7 @@ for i = 1:niter
 
     update = norm(u(:)-uu(:))/norm(uu(:));
     fprintf(1, '%-5d %-16G\n', i, update);
-    if update < min_update
+    if update < tol
         break;
     end
 end

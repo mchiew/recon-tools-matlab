@@ -1,4 +1,4 @@
-function res = cham_pock_xTGV_Toep(d, xfm, T, niter, lambda, plt_fn, u)
+function res = cham_pock_xTGV_Toep(d, xfm, T, niter, lambda, tol, plt_fn, u)
 
 %   Mark Chiew
 %   Feb 2018
@@ -16,9 +16,12 @@ function res = cham_pock_xTGV_Toep(d, xfm, T, niter, lambda, plt_fn, u)
 
 %   Initialise
 if nargin < 6
-plt_fn = [];
+tol =   1E-4;
 end
 if nargin < 7
+plt_fn = [];
+end
+if nargin < 8
 u   =   zeros([xfm.Nd(1:2) xfm.Nt],'single');
 uu  =   zeros([xfm.Nd(1:2) xfm.Nt],'single');
 else
@@ -31,12 +34,10 @@ q   =   zeros([xfm.Nd(1:2) xfm.Nt 3],'single');
 r2  =   zeros([xfm.Nd(1:2) xfm.Nt],'single');
 d   =   reshape(xfm'*d, [xfm.Nd(1:2) xfm.Nt]);
 
-t   =   1/sqrt(abs(T(1,1)));
-s   =   1/sqrt(abs(T(1,1)));
+t   =   1/abs(T(1));
+s   =   1/abs(T(1));
 a1  =   1;
 a0  =   2;
-
-min_update  =   1E-4;
 
 fprintf(1, '%-5s %-16s\n', 'iter','rel. update');
 for i = 1:niter
@@ -55,7 +56,7 @@ for i = 1:niter
 
     update = norm(u(:)-uu(:))/norm(uu(:));
     fprintf(1, '%-5d %-16G\n', i, update);
-    if update < min_update
+    if update < tol
         break;
     end
 end
