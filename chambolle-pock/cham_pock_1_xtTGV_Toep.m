@@ -1,4 +1,4 @@
-function res = cham_pock_xtTGV_Toep(d, xfm, T, niter, lambda_x, lambda_t, tol, plt_fn, u)
+function res = cham_pock_1_xtTGV_Toep(d, xfm, T, niter, lambda_x, lambda_t, tol, plt_fn, u)
 
 %   Mark Chiew
 %   Feb 2018
@@ -7,6 +7,8 @@ function res = cham_pock_xtTGV_Toep(d, xfm, T, niter, lambda_x, lambda_t, tol, p
 %   for total generalised variation
 %   From Chambole & Pock, 2011 Journal of Mathematical Imaging and Vision
 %   Knoll, Bredies, Pock & Stollberger, 2011 MRM
+%
+%   This corresponds to Algorithm 1 in Chambolle & Pock
 
 %   Note lambda inversely weights the data consistency term here
 %   i.e., bigger lambda means more relative TGV weighting

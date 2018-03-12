@@ -1,4 +1,4 @@
-function u = cham_pock_tTGV(d, xfm, niter, lambda, tol, u)
+function u = cham_pock_1_tTGV(d, xfm, niter, lambda, tol, u)
 
 %   Mark Chiew
 %   Feb 2018

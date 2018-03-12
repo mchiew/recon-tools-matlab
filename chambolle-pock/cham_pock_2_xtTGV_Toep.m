@@ -40,10 +40,10 @@ q   =   zeros([xfm.Nd(1:2) xfm.Nt 6],'single');
 r2  =   zeros([xfm.Nd(1:2) xfm.Nt],'single');
 d   =   reshape(xfm'*d, [xfm.Nd(1:2) xfm.Nt]);
 
-t   =   step/abs(T(1));    %   this is tau in Chambolle & Pock
-s   =   step/abs(T(1));    %   this is sigma in Chambolle & Pock
-h   =   1;              %   this is theta in Chambolle & Pock
-g   =   1;              %   this is gamma in Chambolle & Pock
+t   =   step/abs(T(1));     % this is tau in Chambolle & Pock
+s   =   step/abs(T(1));     % this is sigma in Chambolle & Pock
+h   =   1;                  % this is theta in Chambolle & Pock
+g   =   1;                  % this is gamma in Chambolle & Pock
 a1  =   1;
 a0  =   2;
 
