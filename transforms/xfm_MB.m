@@ -47,6 +47,7 @@ properties (SetAccess = protected, GetAccess = public)
     phs     =   [];
     Ns      =   1;
     MB      =   1;
+    w       =   [];
 end
 
 methods
@@ -59,8 +60,9 @@ function res = xfm_MB(dims, coils, fieldmap_struct, varargin)
     p   =   inputParser;
 
     %   Input options
-    p.addParameter('mask',     true(dims));
-    p.addParameter('phs',   1         );
+    p.addParameter('mask',  true(dims));
+    p.addParameter('phs',   ones(1,1,1,res.Nt));
+    p.addParameter('w',     ones(res.Nc,1));
 
     p.parse(varargin{:});
     p   =   p.Results;
@@ -69,7 +71,8 @@ function res = xfm_MB(dims, coils, fieldmap_struct, varargin)
     res.Ns      =   size(p.mask, 5);
     res.MB      =   dims(3)/res.Ns;
     res.phs     =   p.phs;
-    res.dsize   =   [nnz(p.mask(:,:,:,:,1)), res.Nc, res.Ns];
+    res.dsize   =   [nnz(p.mask(:,:,:,1,1)), res.Nt, res.Nc, res.Ns];
+    res.w       =   p.w;
 
     if length(res.M) < res.Ns
         res.M   =   repmat(res.M,1,res.Ns);
@@ -86,13 +89,14 @@ function res = mtimes(a,b)
     %   Inverse FFT
         res =   zeros([a.Nd a.Nt]);
         b   =   reshape(b, [], a.Nt, a.Nc, a.Ns);
+        d   =   zeros([a.Nd 1 a.Nc]);
         for t = 1:a.Nt
-            d   =   zeros([a.Nd 1 a.Nc]);
         for c = 1:a.Nc
         for s = 1:a.Ns
             tmp =   zeros([a.Nd(1:2) a.Nd(3)/a.Ns]);
             tmp(m(:,:,:,t,s))   =   b(:,t,c,s);
-            d(:,:,s:a.Ns:end,1,c) =   mtimes(a.M(s)', tmp, @xfm.ifftfn_ns, 2:3, t);
+            %d(:,:,s:a.Ns:end,1,c) =   mtimes(a.M(s)', tmp, @xfm.ifftfn_ns, 2:3, t);
+            d(:,:,s:a.Ns:end,1,c) =   a.ifftfn_ns(tmp, 2:3);
         end
         end
             res(:,:,:,t)    =   (a.S'*d).*conj(phs(:,:,:,t));
@@ -105,15 +109,36 @@ function res = mtimes(a,b)
         for c = 1:a.Nc
         for t = 1:a.Nt
         for s = 1:a.Ns
-            tmp =   mtimes(a.M(s), b(:,:,s:a.Ns:end,t,c), @xfm.fftfn_ns, 2:3, t);
+            %tmp =   mtimes(a.M(s), b(:,:,s:a.Ns:end,t,c), @xfm.fftfn_ns, 2:3, t);
+            tmp =   a.fftfn_ns(b(:,:,s:a.Ns:end,t,c), 2:3);
             res(:,t,c,s)  =   tmp(m(:,:,:,t,s));
         end
         end
         end
-        res =   reshape(res, a.dsize);
+        %res =   reshape(res, a.dsize);
     end
 
 end
+
+function b = mtimes_Toeplitz(a,T,b)
+    m   =   a.mask;
+    phs =   a.phs;
+    %   Forward FFT and sampling
+        b   =   reshape(b, [], a.Nt);
+        for t = 1:a.Nt
+            bb  =   a.S*b(:,t);
+            bb(:,:,:,1,:) =   bb(:,:,:,1,:).*phs(:,:,:,t);
+        for c = 1:a.Nc
+        for s = 1:a.Ns
+            bb(:,:,s:a.Ns:end,1,c)  =   a.ifftfn_ns(a.fftfn_ns(bb(:,:,s:a.Ns:end,1,c),2:3).*m(:,:,:,t,s),2:3);
+        end
+        end
+            bb(:,:,:,1,:) =   bb(:,:,:,1,:).*conj(phs(:,:,:,t));
+            b(:,t)  =   reshape(a.S'*bb,[],1); 
+        end
+     
+end
+
 
 function res = mean(a,b)
     res =   zeros([prod(a.Nd)*a.Nt a.Nc]);
@@ -135,20 +160,22 @@ function g = gfactor(a,t)
 
     for i = 1:a.Nd(1)
         idx =   find(sens(i,:,:,1));
-        tmp =   zeros(length(idx));
         [uu vv] = ind2sub(a.Nd(2:3),find(m1(i,:,:)));
         [ii jj] = ind2sub(a.Nd(2:3),idx);
         F   =   exp(-1j*2*pi*((ii-1)'.*(uu-1)/a.Nd(2)+(jj-1)'.*(vv-1)/a.Nd(3)))/prod(a.Nd(2:3));
         s   =   reshape(sens(i,:,:,:),[],a.Nc);
-        s   =   s(idx,:);
-        for j = 1:length(idx)
-            tmp(:,j)=sum((F'*(s(j,:).*F(:,j))).*conj(s),2);
+        s   =   s(idx,:).';
+
+        sd  =   zeros(length(idx));
+        for c = 1:a.Nc
+            sd  = sd + s(c,:)'*s(c,:);
         end
+        tmp = (F'*F).*sd;
+
         g(i,idx)    =   real(sqrt(diag(inv(tmp)).*diag(tmp)));
     end
-
-    
 end
+
 
 end
 end

@@ -56,7 +56,7 @@ function res = xfm_MB_conj(dims, coils, fieldmap_struct, varargin)
     %   Conjugate coils
     res.S2  =   sensEncodingMatrix(cat(4,coils,conj(coils))/sqrt(2));
     res.Nc  =   res.S2.Nc;
-    res.dsize(2)    =   res.Nc;
+    res.dsize(3)    =   res.Nc;
 
     %   Flip sampling mask
     res.mask2   =   cat(6, res.mask, circshift(flip(circshift(flip(res.mask,2),1,2),3),1,3));
@@ -66,6 +66,8 @@ function res = xfm_MB_conj(dims, coils, fieldmap_struct, varargin)
         res.phs =   repmat(res.phs,1,1,1,res.Nt);
     end
 
+    res.w   =   ones(res.Nc,1);
+
 end
 
 
@@ -73,6 +75,8 @@ function res = mtimes(a,b)
 
     m   =   a.mask2;
     phs =   a.phs;
+    w   =   sqrt(a.w);
+
     if a.adjoint
     %   Inverse FFT
         res =   zeros([a.Nd a.Nt]);
@@ -82,8 +86,9 @@ function res = mtimes(a,b)
         for c = 1:a.Nc
         for s = 1:a.Ns
             tmp =   zeros([a.Nd(1:2) a.Nd(3)/a.Ns]);
-            tmp(m(:,:,:,t,s,(c>a.Nc/2)+1))   =   b(:,t,c,s);
-            d(:,:,s:a.Ns:end,1,c) =   mtimes(a.M(s)', tmp, @xfm.ifftfn_ns, 2:3, t);
+            tmp(m(:,:,:,t,s,(c>a.Nc/2)+1))   =   w(c)*b(:,t,c,s);
+            %d(:,:,s:a.Ns:end,1,c) =   mtimes(a.M(s)', tmp, @xfm.ifftfn_ns, 2:3, t);
+            d(:,:,s:a.Ns:end,1,c) =   a.ifftfn_ns(tmp, 2:3);
         end
         end
             d(:,:,:,:,1:a.Nc/2) =   d(:,:,:,:,1:a.Nc/2).*conj(phs(:,:,:,t));
@@ -101,14 +106,39 @@ function res = mtimes(a,b)
             bb(:,:,:,1,a.Nc/2+1:a.Nc) =   bb(:,:,:,1,a.Nc/2+1:a.Nc).*conj(phs(:,:,:,t));
         for c = 1:a.Nc
         for s = 1:a.Ns
-            tmp =   mtimes(a.M(s), bb(:,:,s:a.Ns:end,1,c), @xfm.fftfn_ns, 2:3, t);
-            res(:,t,c,s)  =   tmp(m(:,:,:,t,s,(c>a.Nc/2)+1));
+            %tmp =   mtimes(a.M(s), bb(:,:,s:a.Ns:end,1,c), @xfm.fftfn_ns, 2:3, t);
+            tmp =   a.fftfn_ns(bb(:,:,s:a.Ns:end,1,c), 2:3);
+            res(:,t,c,s)  =   w(c)*tmp(m(:,:,:,t,s,(c>a.Nc/2)+1));
         end
         end
         end
-        res =   reshape(res, a.dsize);
+        %res =   reshape(res, a.dsize);
     end
 
+end
+
+function b = mtimes_Toeplitz(a,T,b,w)
+    m   =   a.mask2;
+    phs =   a.phs;
+    if nargin < 4
+        w   =   ones(a.Nc,1);
+    end
+    %   Forward FFT and sampling
+        b   =   reshape(b, [], a.Nt);
+        for t = 1:a.Nt
+            bb  =   a.S2*b(:,t);
+            bb(:,:,:,1,1:a.Nc/2) =   bb(:,:,:,1,1:a.Nc/2).*phs(:,:,:,t);
+            bb(:,:,:,1,a.Nc/2+1:a.Nc) =   bb(:,:,:,1,a.Nc/2+1:a.Nc).*conj(phs(:,:,:,t));
+        for c = 1:a.Nc
+        for s = 1:a.Ns
+            bb(:,:,s:a.Ns:end,1,c)  =   w(c)*a.ifftfn_ns(a.fftfn_ns(bb(:,:,s:a.Ns:end,1,c),2:3).*m(:,:,:,t,s,(c>a.Nc/2)+1),2:3);
+        end
+        end
+            bb(:,:,:,1,1:a.Nc/2) =   bb(:,:,:,1,1:a.Nc/2).*conj(phs(:,:,:,t));
+            bb(:,:,:,1,a.Nc/2+1:a.Nc) =   bb(:,:,:,1,a.Nc/2+1:a.Nc).*phs(:,:,:,t);
+            b(:,t)  =   reshape(a.S2'*bb,[],1); 
+        end
+     
 end
 
 function res = flip(a,b)
@@ -121,14 +151,15 @@ function res = flip(a,b)
     for s = 1:a.Ns
         tmp(m(:,:,:,t,s),:,s) =   b(:,t,:,s);
     end
-        tmp =   reshape(tmp,[size(m(:,:,:,1,1)), a.Nc/2, a.Ns]);
+        tmp =   reshape(tmp,[size(m,1), size(m,2), size(m,3) a.Nc/2, a.Ns]);
         tmp =   conj(circshift(flip(circshift(flip(tmp,2),1,2),3),1,3));
         tmp =   reshape(tmp, [], a.Nc/2, a.Ns);
     for s = 1:a.Ns
         res(:,t,:,s)  =   tmp(m2(:,:,:,t,s),:,s);
     end
     end
-    res =   reshape(cat(3, b, res), [], a.Nc, a.Ns);
+    %res =   reshape(cat(3, b, res), [], a.Nc, a.Ns);
+    res =   cat(3, b, res);
 end
 
 function g = gfactor(a,t)
@@ -153,13 +184,13 @@ function g = gfactor(a,t)
         [ii jj] = ind2sub(a.Nd(2:3),idx);
         F1  =   exp(-1j*2*pi*((ii-1)'.*(uu1-1)/a.Nd(2)+(jj-1)'.*(vv1-1)/a.Nd(3)))/prod(a.Nd(2:3));
         F2  =   exp(-1j*2*pi*((ii-1)'.*(uu2-1)/a.Nd(2)+(jj-1)'.*(vv2-1)/a.Nd(3)))/prod(a.Nd(2:3));
-        s1  =   reshape(sens(i,:,:,c1),[],a.Nc/2);
-        s1  =   s1(idx,:);
-        s2  =   reshape(sens(i,:,:,c2),[],a.Nc/2);
-        s2  =   s2(idx,:);
-        for j = 1:length(idx)
-            tmp(:,j)    =   sum((F1'*(s1(j,:).*F1(:,j))).*conj(s1),2) + sum((F2'*(s2(j,:).*F2(:,j))).*conj(s2),2);
+        s   =   reshape(sens(i,:,:,c1),[],a.Nc/2);
+        s   =   s(idx,:).';
+        sd  =   zeros(length(idx));
+        for c = 1:a.Nc/2
+            sd  = sd + s(c,:)'*s(c,:);
         end
+        tmp =   (F1'*F1 + F2'*F2).*sd;
         g(i,idx)    =   real(sqrt(diag(inv(tmp)).*diag(tmp)));
     end
 
