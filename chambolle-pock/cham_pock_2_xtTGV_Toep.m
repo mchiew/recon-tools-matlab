@@ -28,17 +28,17 @@ if nargin < 9
 plt_fn = [];
 end
 if nargin < 10
-u   =   zeros([xfm.Nd(1:2) xfm.Nt],'single');
-uu  =   zeros([xfm.Nd(1:2) xfm.Nt],'single');
+u   =   zeros([xfm.Nd(1:3) xfm.Nt],'single');
+uu  =   zeros([xfm.Nd(1:3) xfm.Nt],'single');
 else
 uu  =   u;
 end
-v   =   zeros([xfm.Nd(1:2) xfm.Nt 3],'single');
-vv  =   zeros([xfm.Nd(1:2) xfm.Nt 3],'single');
-p   =   zeros([xfm.Nd(1:2) xfm.Nt 3],'single');
-q   =   zeros([xfm.Nd(1:2) xfm.Nt 6],'single');
-r2  =   zeros([xfm.Nd(1:2) xfm.Nt],'single');
-d   =   reshape(xfm'*d, [xfm.Nd(1:2) xfm.Nt]);
+v   =   zeros([xfm.Nd(1:3) xfm.Nt 3],'single');
+vv  =   zeros([xfm.Nd(1:3) xfm.Nt 3],'single');
+p   =   zeros([xfm.Nd(1:3) xfm.Nt 3],'single');
+q   =   zeros([xfm.Nd(1:3) xfm.Nt 6],'single');
+r2  =   zeros([xfm.Nd(1:3) xfm.Nt],'single');
+d   =   reshape(xfm'*d, [xfm.Nd(1:3) xfm.Nt]);
 
 t   =   step/abs(T(1));     % this is tau in Chambolle & Pock
 s   =   step/abs(T(1));     % this is sigma in Chambolle & Pock
@@ -53,7 +53,7 @@ fprintf(1, '%-5s %-16s\n', 'iter','rel. update');
 for i = 1:niter
     p   =   proj(p + s*(grad(u+h*(u-uu),lambda_x,lambda_t) - (v+h*(v-vv))), a1);
     q   =   proj(q + s*symgrad(v+h*(v-vv),lambda_x,lambda_t), a0);
-    r2  =   prox(r2 - s*d + s*reshape(mtimes_Toeplitz(xfm, T, u+h*(u-uu)),[xfm.Nd(1:2) xfm.Nt]), s, lambda_t); 
+    r2  =   prox(r2 - s*d + s*reshape(mtimes_Toeplitz(xfm, T, u+h*(u-uu)),[xfm.Nd(1:3) xfm.Nt]), s, lambda_t); 
 
     uu  =   u;
     u   =   u + t*(div(p,lambda_x,lambda_t)-r2);
@@ -110,11 +110,11 @@ function x = pgrad(x, dim, Lx, Lt)
 %    0 -1  1  0
 %    0  0 -1  1
     if dim == 1
-        x = diff(cat(1,x(end,:,:,:),x),1,1)*(Lx/Lt);
+        x = diff(cat(1,x(end,:,:,:,:),x),1,1)*(Lx/Lt);
     elseif dim == 2 
-        x = diff(cat(2,x(:,end,:,:),x),1,2)*(Lx/Lt);
-    elseif dim == 3 
-        x = diff(cat(3,x(:,:,end,:),x),1,3);
+        x = diff(cat(2,x(:,end,:,:,:),x),1,2)*(Lx/Lt);
+    elseif dim == 4 
+        x = diff(cat(4,x(:,:,:,end,:),x),1,4);
     end
 end
 
@@ -142,17 +142,17 @@ function x = ngrad(x,dim, Lx, Lt)
 %    0  0 -1  1
 %    1  0  0 -1
     if dim == 1
-        x = cat(1,diff(x,1,1),x(1,:,:,:)-x(end,:,:,:))*(Lx/Lt);
+        x = cat(1,diff(x,1,1),x(1,:,:,:,:)-x(end,:,:,:,:))*(Lx/Lt);
     elseif dim == 2 
-        x = cat(2,diff(x,1,2),x(:,1,:,:)-x(:,end,:,:))*(Lx/Lt);
-    elseif dim == 3 
-        x = cat(3,diff(x,1,3),x(:,:,1,:)-x(:,:,end,:));
+        x = cat(2,diff(x,1,2),x(:,1,:,:,:)-x(:,end,:,:,:))*(Lx/Lt);
+    elseif dim == 4 
+        x = cat(4,diff(x,1,4),x(:,:,:,1,:)-x(:,:,:,end,:));
     end
 end
 
 function y = grad(x,Lx,Lt)
 %   1->3
-    y = cat(4,pgrad(x,1,Lx,Lt),pgrad(x,2,Lx,Lt),pgrad(x,3,Lx,Lt));
+    y = cat(5,pgrad(x,1,Lx,Lt),pgrad(x,2,Lx,Lt),pgrad(x,4,Lx,Lt));
 end
 
 function y = symgrad(x,Lx,Lt)
@@ -175,14 +175,14 @@ function y = symgrad(x,Lx,Lt)
 %     2 6
 %       3
 %   3->6
-    y   =   zeros([size(x,1) size(x,2) size(x,3) 6]);
+    y   =   zeros([size(x,1) size(x,2) size(x,3) size(x,4) 6]);
     
-    y(:,:,:,1) =        pgrad(x(:,:,:,1),1,Lx,Lt);
-    y(:,:,:,2) =                            pgrad(x(:,:,:,2),2,Lx,Lt);
-    y(:,:,:,3) =                                                pgrad(x(:,:,:,3),3,Lx,Lt);
-    y(:,:,:,4) = 0.5*(  pgrad(x(:,:,:,1),2,Lx,Lt)+pgrad(x(:,:,:,2),1,Lx,Lt));
-    y(:,:,:,5) = 0.5*(  pgrad(x(:,:,:,1),3,Lx,Lt)+                    pgrad(x(:,:,:,3),1,Lx,Lt));
-    y(:,:,:,6) = 0.5*(                      pgrad(x(:,:,:,2),3,Lx,Lt)+pgrad(x(:,:,:,3),2,Lx,Lt));
+    y(:,:,:,:,1) =        pgrad(x(:,:,:,:,1),1,Lx,Lt);
+    y(:,:,:,:,2) =                                    pgrad(x(:,:,:,:,2),2,Lx,Lt);
+    y(:,:,:,:,3) =                                                                pgrad(x(:,:,:,:,3),4,Lx,Lt);
+    y(:,:,:,:,4) = 0.5*(  pgrad(x(:,:,:,:,1),2,Lx,Lt)+pgrad(x(:,:,:,:,2),1,Lx,Lt));
+    y(:,:,:,:,5) = 0.5*(  pgrad(x(:,:,:,:,1),4,Lx,Lt)                            +pgrad(x(:,:,:,:,3),1,Lx,Lt));
+    y(:,:,:,:,6) = 0.5*(                              pgrad(x(:,:,:,:,2),4,Lx,Lt)+pgrad(x(:,:,:,:,3),2,Lx,Lt));
 end
 
 function x = prox(x,s,lambda) 
@@ -192,15 +192,15 @@ end
 function y = div(x,Lx,Lt)
 %   Adjoint of grad
 %   3->1
-    y = ngrad(x(:,:,:,1),1,Lx,Lt) + ngrad(x(:,:,:,2),2,Lx,Lt) + ngrad(x(:,:,:,3),3,Lx,Lt);
+    y = ngrad(x(:,:,:,:,1),1,Lx,Lt) + ngrad(x(:,:,:,:,2),2,Lx,Lt) + ngrad(x(:,:,:,:,3),4,Lx,Lt);
 end
 
 function y = symdiv(x,Lx,Lt)
 %   Adjoint of Symgrad
 %   6->3
-    y   =   zeros([size(x,1) size(x,2) size(x,3) 3]);
+    y   =   zeros([size(x,1) size(x,2) size(x,3) size(x,4) 3]);
 
-    y(:,:,:,1) = ngrad(x(:,:,:,1),1,Lx,Lt) + ngrad(x(:,:,:,4),2,Lx,Lt) + ngrad(x(:,:,:,5),3,Lx,Lt);
-    y(:,:,:,2) = ngrad(x(:,:,:,2),2,Lx,Lt) + ngrad(x(:,:,:,4),1,Lx,Lt) + ngrad(x(:,:,:,6),3,Lx,Lt);
-    y(:,:,:,3) = ngrad(x(:,:,:,3),3,Lx,Lt) + ngrad(x(:,:,:,5),1,Lx,Lt) + ngrad(x(:,:,:,6),2,Lx,Lt);
+    y(:,:,:,:,1) = ngrad(x(:,:,:,:,1),1,Lx,Lt) + ngrad(x(:,:,:,:,4),2,Lx,Lt) + ngrad(x(:,:,:,:,5),4,Lx,Lt);
+    y(:,:,:,:,2) = ngrad(x(:,:,:,:,2),2,Lx,Lt) + ngrad(x(:,:,:,:,4),1,Lx,Lt) + ngrad(x(:,:,:,:,6),4,Lx,Lt);
+    y(:,:,:,:,3) = ngrad(x(:,:,:,:,3),4,Lx,Lt) + ngrad(x(:,:,:,:,5),1,Lx,Lt) + ngrad(x(:,:,:,:,6),2,Lx,Lt);
 end
