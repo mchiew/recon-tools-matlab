@@ -120,23 +120,21 @@ function res = mtimes(a,b)
 
 end
 
-function b = mtimes_Toeplitz(a,T,b)
+function b = mtimes2(a,b)
     m   =   a.mask;
-    phs =   a.phs;
+    dim =   size(b);
     %   Forward FFT and sampling
         b   =   reshape(b, [], a.Nt);
         for t = 1:a.Nt
             bb  =   a.S*b(:,t);
-            bb(:,:,:,1,:) =   bb(:,:,:,1,:).*phs(:,:,:,t);
         for c = 1:a.Nc
         for s = 1:a.Ns
             bb(:,:,s:a.Ns:end,1,c)  =   a.ifftfn_ns(a.fftfn_ns(bb(:,:,s:a.Ns:end,1,c),2:3).*m(:,:,:,t,s),2:3);
         end
         end
-            bb(:,:,:,1,:) =   bb(:,:,:,1,:).*conj(phs(:,:,:,t));
             b(:,t)  =   reshape(a.S'*bb,[],1); 
         end
-     
+    b   =   reshape(b, dim); 
 end
 
 
@@ -154,7 +152,7 @@ function g = gfactor(a,t)
         t = 1;
     end
     
-    m1      =   fftshift(fftshift(a.mask(:,:,:,t),2),3);
+    m1      =   a.mask(:,:,:,t);
     sens    =   reshape(a.S.coils,[a.Nd(1:3) a.Nc]).*a.phs(:,:,:,t);
     g       =   zeros(a.Nd(1:3));
 
@@ -162,7 +160,7 @@ function g = gfactor(a,t)
         idx =   find(sens(i,:,:,1));
         [uu vv] = ind2sub(a.Nd(2:3),find(m1(i,:,:)));
         [ii jj] = ind2sub(a.Nd(2:3),idx);
-        F   =   exp(-1j*2*pi*((ii-1)'.*(uu-1)/a.Nd(2)+(jj-1)'.*(vv-1)/a.Nd(3)))/prod(a.Nd(2:3));
+        F   =   exp(-1j*2*pi*((ii(:)-1)'.*(uu(:)-1)/a.Nd(2)+(jj(:)-1)'.*(vv(:)-1)/a.Nd(3)))/sqrt(prod(a.Nd(2:3)));
         s   =   reshape(sens(i,:,:,:),[],a.Nc);
         s   =   s(idx,:).';
 
@@ -176,6 +174,32 @@ function g = gfactor(a,t)
     end
 end
 
+function b = inv(a,b)
+    Nt  =   a.Nt;
+
+    sens    =   reshape(a.S.coils,[a.Nd(1:3) a.Nc]);
+    b       =   reshape(a'*b, a.Nd(1), [], Nt);
+    m       =   a.mask(:,:,:,:,1);
+
+    for i = 1:a.Nd(1)
+        idx =   find(sens(i,:,:,1));
+        if ~isempty(idx)
+            s   =   reshape(sens(i,:,:,:),[],a.Nc);
+            s   =   s(idx,:).';
+            sd  =   zeros(length(idx));
+            for c = 1:a.Nc
+                sd  = sd + s(c,:)'*s(c,:);
+            end
+            [ii jj] = ind2sub(a.Nd(2:3),idx);
+            for t = 1:Nt
+                [uu vv] =   ind2sub(a.Nd(2:3),find(m(i,:,:,t)));
+                F       =   exp(-1j*2*pi*((ii-1)'.*(uu-1)/a.Nd(2)+(jj-1)'.*(vv-1)/a.Nd(3)))/sqrt(prod(a.Nd(2:3)));
+                b(i, idx, t)=   inv((F'*F).*sd)*shiftdim(b(i,idx,t),1);
+            end
+        end
+    end
+    b   =   reshape(b,[a.Nd(1:3) Nt]);
+end
 
 end
 end
