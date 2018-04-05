@@ -39,15 +39,19 @@ function res = xfm(dims, coils, fieldmap_struct)
     end
 end
 
-function res = ctranspose(a)
-    
-    a.adjoint   = xor(a.adjoint,1);
-    res         = a;
-
+function a = ctranspose(a)   
+    a.adjoint   = xor(a.adjoint,1);    
 end
 
 function step = max_step(xfm)
-    step    =   norm(ones(xfm.msize(1),1))/norm(mtimes(xfm',mtimes(xfm,ones(xfm.msize(1),1),1),1));
+    %   Use the power method to find the max eigenvalue of E'E
+    y   =   randn(xfm.msize);
+    N   =   0;
+    while abs(norm(y(:)) - N)/N > 1E-4
+        N   =   norm(y(:));
+        y   =   xfm.mtimes2(y/N);
+    end
+    step    =   1./norm(y(:));
 end
 
 function est = cg(xfm, d, tol, iters)
@@ -62,23 +66,38 @@ function est = cg(xfm, d, tol, iters)
         iters   =   100;
     end
 
-    [est, flag, relres] =   lsqr(@(x,mode) afun(x,mode,xfm), reshape(d,[],1), tol, iters);
+    [est, flag, relres, iter] =   lsqr(@(x,mode) afun(x,mode,xfm), reshape(d,[],1), tol, iters);
     est =   reshape(est, xfm.msize);
+
+    fprintf(1, 'Exit after %i iterations, residual: %G\n', iter, relres);
 end
 
-function est = tmean(xfm, d, tol, iters)
+function est = iter(xfm, d, optfn, tol, iters, L, init)
 
-    %   Performs iterative SENSE recon using built-in lsqr
+    %   Performs symmetric iterative recon using built-ins
     %   Input d should be shaped like the output of mtimes
+    %   Solves normal equation
 
     if nargin < 3
-        tol     =   [];
+        optfn   =   @minres;
     end
     if nargin < 4
+        tol     =   [];
+    end
+    if nargin < 5
         iters   =   100;
     end
+    if nargin < 6
+        L       =   [0,0,0,0];
+    end
+    if nargin < 7
+        init    =   zeros(prod(xfm.msize),1);
+    end
 
-    [est, flag, relres] =   lsqr(@(x,mode) bfun(x,mode,xfm), reshape(d,[],1), tol, iters);
+    [est, ~, relres, iter] =   optfn(@(x,mode) reshape(mtimes2(xfm, reshape(x,[xfm.Nd xfm.Nt])),[],1) + reshape(xfm.R2(reshape(x,[xfm.Nd xfm.Nt]),L),[],1), reshape(xfm'*d,[],1), tol, iters, [], [], reshape(init,[],1));
+    est =   reshape(est, xfm.msize);
+    
+    fprintf(1, 'Exit after %i iterations, residual: %G\n', iter, relres);
 end
 
 function res = times(a,b)
@@ -94,31 +113,37 @@ end
 methods (Static)
 function b = fftfn(b,dims)
     d   =   sqrt(size(b));
-    for i = dims
+    for i = intersect(1:ndims(b), dims)
         b   =   fftshift(fft(ifftshift(b, i), [], i), i)/d(i);
     end
 end
 function b = fftfn_ns(b,dims)
     d   =   sqrt(size(b));
-    for i = dims
+    for i = intersect(1:ndims(b), dims)
         b   =   fft(b, [], i)/d(i);
     end
 end
 
 function b = ifftfn(b,dims)
     d   =   sqrt(size(b));
-    for i = dims
+    for i = intersect(1:ndims(b), dims)
         b   =   fftshift(ifft(ifftshift(b, i), [], i), i)*d(i);
     end
 end
 function b = ifftfn_ns(b,dims)
     d   =   sqrt(size(b));
-    for i = dims
+    for i = intersect(1:ndims(b), dims)
         b   =   ifft(b, [], i)*d(i);
     end
 end
 function x = size(b)
     [x(1) x(2) x(3) x(4)]   =   size(b);
+end
+function x = R2(x, L)
+    x = L(1)*(1*circshift(x,-2,1) - 4*circshift(x,-1,1) + 6*x - 4*circshift(x,1,1) + 1*circshift(x,2,1)) + ...
+        L(2)*(1*circshift(x,-2,2) - 4*circshift(x,-1,2) + 6*x - 4*circshift(x,1,2) + 1*circshift(x,2,2)) + ...
+        L(3)*(1*circshift(x,-2,3) - 4*circshift(x,-1,3) + 6*x - 4*circshift(x,1,3) + 1*circshift(x,2,3)) + ...
+        L(4)*(1*circshift(x,-2,4) - 4*circshift(x,-1,4) + 6*x - 4*circshift(x,1,4) + 1*circshift(x,2,4));
 end
 end
 
@@ -129,13 +154,5 @@ function y = afun(x, mode, xfm)
         y   =   reshape(xfm'*reshape(x,xfm.dsize),[],1);
     else
         y   =   reshape(xfm*reshape(x,xfm.msize),[],1);
-    end
-end
-
-function y = bfun(x, mode, xfm)
-    if strcmp(mode, 'transp')
-        y   =   mean(xfm'*reshape(x,xfm.dsize),2);
-    else
-        y   =   reshape(xfm*repmat(x,1,xfm.Nt),[],1);
     end
 end
