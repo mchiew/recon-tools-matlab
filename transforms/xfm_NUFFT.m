@@ -47,6 +47,7 @@ properties (SetAccess = protected, GetAccess = public)
     Kd      =   [];
     shift   =   [];
     st;
+    PSF     =   []; % Eigenvalues of circulant embedding 
 end
 
 methods
@@ -102,7 +103,6 @@ function res = xfm_NUFFT(dims, coils, fieldmap_struct, k, varargin)
         for ii = 1:5
             w  =   w./real(res.st(t).p*(res.st(t).p'*w));
         end
-        res.w = repmat(w,1,res.Nt);
     elseif isscalar(p.wi)
         res.w   =   repmat(p.wi, 1, res.Nt);
     else
@@ -111,10 +111,12 @@ function res = xfm_NUFFT(dims, coils, fieldmap_struct, k, varargin)
     res.w       =   sqrt(res.w);
     res.norm    =   sqrt(res.st(1).sn(ceil(end/2),ceil(end/2),ceil(end/2))^(-2)/prod(res.st(1).Kd));
 
-
+    if (dims(1) == dims(2)) && (dims(3) == 1)
+        res.PSF =   res.calcToeplitzEmbedding();
+    end
 end
 
-function res = calcToeplitzEmbedding(a,idx)
+function T = calcToeplitzEmbedding(a,idx)
     %   Right now assumes square 2D matrix
     %   Will generalise later....
     %   Computes first column of the block-circulant embedding for the block toeplitz A'A
@@ -221,15 +223,12 @@ function res = calcToeplitzEmbedding(a,idx)
     %   This greatly speeds up computation of A'Ax, from O(N^2) to O(N log N)
 
     disp('Computing Toeplitz Embedding')
-    if nargin < 2
-        idx =   1:a.Nt;
-    end
     N   =   sqrt(a.msize(1));
-    Nt  =   length(idx);
+    Nt  =   a.Nt;
     x   =   zeros(2*N,N,Nt);
     tmp =   zeros(N);
     tmp(1,1)    =   1;
-    st  =   a.st(idx);
+    st  =   a.st;
     w   =   a.w.^2;
     for t = 1:Nt
         x(1:N,:,t)  =   nufft_adj(w(:,t).*nufft(tmp, st(t)), st(t));
@@ -240,16 +239,21 @@ function res = calcToeplitzEmbedding(a,idx)
     end
     x(N+1,:,:)  =   0;
     clear tmp;
-    
-    res =   zeros(4*N^2,Nt);
-    res(1:2*N^2,:)  =   reshape(x,[],Nt);
-    res(2*N^2+2*N+1:end,:)  =   conj(reshape(x([1 end:-1:2],end:-1:2,:),[],Nt));
 
-    res     =   fft2(reshape(res,2*N,2*N,[]))*a.norm^2;
+    T =   zeros(4*N^2,Nt);
+    T(1:2*N^2,:)  =   reshape(x,[],Nt);
+    T(2*N^2+2*N+1:end,:)  =   conj(reshape(x([1 end:-1:2],end:-1:2,:),[],Nt));
+    T =   fft2(reshape(T,2*N,2*N,[]))*a.norm^2;
+
 end
 
-function b = mtimes_Toeplitz(a,T,b)
-    Nt  =   size(T,3);
+
+function b = mtimes2(a,b)
+    %   If mtimes(A,b) = A*b, mtimes2(A,b) = A'A*b
+    %   If Toeplitz embedding is available, uses that
+    %   otherwise computes by mtimes(A',mtimes(A,b))
+    PSF =   a.PSF;
+    Nt  =   a.Nt;
     Nd  =   a.Nd(1:2);
     S   =   a.S;
     b   =   reshape(b,[],Nt);
@@ -257,7 +261,7 @@ function b = mtimes_Toeplitz(a,T,b)
     tmp2=   zeros(2*Nd(1),2*Nd(2),1,1,a.Nc);
     for t = 1:Nt
         tmp(1:Nd(1),1:Nd(2),1,1,:)  =  S*b(:,t); 
-        tmp2    =   ifft2(T(:,:,t).*fft2(tmp)); 
+        tmp2    =   ifft2(PSF(:,:,t).*fft2(tmp)); 
         b(:,t)  =   reshape(S'*tmp2(1:Nd(1),1:Nd(2),1,1,:),[],1);
     end
 end
