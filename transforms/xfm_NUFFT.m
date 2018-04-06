@@ -256,14 +256,23 @@ function b = mtimes2(a,b)
     Nt  =   a.Nt;
     Nd  =   a.Nd(1:2);
     S   =   a.S;
+    dim =   size(b);
     b   =   reshape(b,[],Nt);
-    tmp =   zeros(2*Nd(1),2*Nd(2),1,1,a.Nc);
-    tmp2=   zeros(2*Nd(1),2*Nd(2),1,1,a.Nc);
-    for t = 1:Nt
-        tmp(1:Nd(1),1:Nd(2),1,1,:)  =  S*b(:,t); 
-        tmp2    =   ifft2(PSF(:,:,t).*fft2(tmp)); 
-        b(:,t)  =   reshape(S'*tmp2(1:Nd(1),1:Nd(2),1,1,:),[],1);
+
+    if ~isempty(PSF)
+        tmp =   zeros(2*Nd(1),2*Nd(2),1,1,a.Nc);
+        tmp2=   zeros(2*Nd(1),2*Nd(2),1,1,a.Nc);
+        for t = 1:Nt
+            tmp(1:Nd(1),1:Nd(2),1,1,:)  =  S*b(:,t); 
+            tmp2    =   ifft2(PSF(:,:,t).*fft2(tmp)); 
+            b(:,t)  =   reshape(S'*tmp2(1:Nd(1),1:Nd(2),1,1,:),[],1);
+        end
+    else
+        b   =   mtimes(a', mtimes(a, b));
     end
+
+    %   Return b in the same shape it came in
+    b   =   reshape(b, dim);    
 end
 
 function res = mtimes(a,b,idx)
