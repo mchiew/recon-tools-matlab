@@ -50,10 +50,10 @@ properties (SetAccess = protected, GetAccess = public)
 end
 
 methods
-function res = xfm_NUFFT_spectro(dims, coils, fieldmap_struct, k, kf, varargin)
+function res = xfm_NUFFT_spectro(dims, coils, k, varargin)
 
     %   Base class constructor
-    res =   res@xfm(dims, coils, fieldmap_struct);
+    res =   res@xfm(dims, coils, []);
     
     %   Parse remaining inputs
     p   =   inputParser;
@@ -66,6 +66,7 @@ function res = xfm_NUFFT_spectro(dims, coils, fieldmap_struct, k, kf, varargin)
     p.addParamValue('Jd',       [6,6,6,6],              lengthValidator);
     p.addParamValue('Kd',       2*dims(1:4),            lengthValidator);
     p.addParamValue('shift',    floor(dims(1:4)/2),     lengthValidator);
+    p.addParamValue('kf',       []);
 
     p.parse(varargin{:});
     p   =   p.Results;
@@ -73,9 +74,12 @@ function res = xfm_NUFFT_spectro(dims, coils, fieldmap_struct, k, kf, varargin)
     res.Jd      =   p.Jd;
     res.Kd      =   p.Kd;
     res.shift   =   p.shift;
-
-    k       =   repmat(reshape(k,[],1,3),1,length(kf),1);
-    k(:,:,4)=   repmat(reshape(kf,1,[]), size(k,1),1);
+    kf          =   p.kf;
+    
+    if ~isempty(kf)
+        k       =   repmat(reshape(k,[],1,3),1,length(kf),1);
+        k(:,:,4)=   repmat(reshape(kf,1,[]), size(k,1),1);
+    end
     res.k   =   reshape(k,[],4);
 
     res.dsize   =   [size(res.k,1) res.Nc];
