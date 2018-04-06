@@ -1,4 +1,4 @@
-function u = spBg_TV_L1(d, xfm, W, niter, mu, lambda, gamma)
+function u = spBg_xTVL1(d, xfm, W, niter, mu, lambda, gamma)
 
 %   Mark Chiew  
 %   Jan 2017
@@ -52,7 +52,7 @@ for ii = 1:niter_inner
     %   Solve u-subproblem
     [u,~,relres]=  minres(@(x) reshape(mu*mtimes2(xfm,x),[],1) + reshape(lambda*(g(g(reshape(x,[xfm.Nd xfm.Nt]),-1,1),1,1) + g(g(reshape(x,[xfm.Nd xfm.Nt]),-1,2),1,2)),[],1) + gamma*x,...
                    reshape(mu*(xfm'.*f) + lambda*(g(dx-bx,1,1) + g(dy-by,1,2)) + gamma*(W'*(w-bw)),[],1),...
-                   1E-6, 100, [], [], u(:));
+                   1E-6, 10, [], [], u(:));
     u           =   reshape(u, [xfm.Nd(1:3) xfm.Nt]);
 
 
