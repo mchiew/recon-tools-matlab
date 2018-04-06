@@ -92,16 +92,18 @@ function x = pgrad(x, dim, Lx, Lt)
 %    0 -1  1  0
 %    0  0 -1  1
 %    0  0  0  0
-%{
-    if dim == 1
+    switch dim
+    case 1
         x = cat(1,diff(x,1,1),zeros(1,size(x,2),size(x,3),size(x,4)))*(Lx/Lt);
-    elseif dim == 2 
+    case 2
         x = cat(2,diff(x,1,2),zeros(size(x,1),1,size(x,3),size(x,4)))*(Lx/Lt);
-    elseif dim == 3 
-        x = cat(3,diff(x,1,3),zeros(size(x,1),size(x,2),1,size(x,4)));
+    case 3
+        x = cat(3,diff(x,1,3),zeros(size(x,1),size(x,2),1,size(x,4)))*(Lx/Lt);
+    case 4
+        x = cat(4,diff(x,1,4),zeros(size(x,1),size(x,2),size(x,3),1));
     end
-%}
 
+%{
 %   Cyclic boundary conditions instead
 %    1  0  0 -1
 %   -1  1  0  0
@@ -117,6 +119,7 @@ function x = pgrad(x, dim, Lx, Lt)
     case 4
         x = diff(cat(4,x(:,:,:,end,:),x),1,4);
     end
+%}
 end
 
 function x = ngrad(x,dim, Lx, Lt)
@@ -127,16 +130,18 @@ function x = ngrad(x,dim, Lx, Lt)
 %   -1  1  0  0
 %    0 -1  1  0
 %    0  0 -1  0
-%{
-    if dim == 1
+    switch dim
+    case 1
         x = cat(1,x(1,:,:,:),diff(x(1:end-1,:,:,:),1,1),-x(end-1,:,:,:))*(Lx/Lt);
-    elseif dim == 2
+    case 2
         x = cat(2,x(:,1,:,:),diff(x(:,1:end-1,:,:),1,2),-x(:,end-1,:,:))*(Lx/Lt);
-    elseif dim == 3
-        x = cat(3,x(:,:,1,:),diff(x(:,:,1:end-1,:),1,3),-x(:,:,end-1,:));
+    case 3
+        x = cat(3,x(:,:,1,:),diff(x(:,:,1:end-1,:),1,3),-x(:,:,end-1,:))*(Lx/Lt);
+    case 4
+        x = cat(4,x(:,:,:,1),diff(x(:,:,:,1:end-1),1,4),-x(:,:,:,end-1));
     end
-%}
     
+%{
 %   Cyclic adjoint
 %   -1  1  0  0
 %    0 -1  1  0
@@ -152,6 +157,7 @@ function x = ngrad(x,dim, Lx, Lt)
     case 4
         x = cat(4,diff(x,1,4),x(:,:,:,1,:)-x(:,:,:,end,:));
     end
+%}
 end
 
 function y = grad(x,Lx,Lt)
