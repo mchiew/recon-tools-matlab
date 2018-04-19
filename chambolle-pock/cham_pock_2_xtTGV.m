@@ -38,7 +38,7 @@ vv  =   zeros([xfm.Nd(1:3) xfm.Nt 4],'single');
 p   =   zeros([xfm.Nd(1:3) xfm.Nt 4],'single');
 q   =   zeros([xfm.Nd(1:3) xfm.Nt 10],'single');
 r2  =   zeros([xfm.Nd(1:3) xfm.Nt],'single');
-d   =   reshape(xfm'*d, [xfm.Nd(1:3) xfm.Nt]);
+d   =   reshape(d, [xfm.Nd(1:3) xfm.Nt]);
 
 h   =   step;                  % this is theta in Chambolle & Pock
 t   =   h/sqrt(8);          % this is tau in Chambolle & Pock
