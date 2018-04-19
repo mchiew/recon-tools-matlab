@@ -111,14 +111,13 @@ function res = xfm_NUFFT(dims, coils, fieldmap_struct, k, varargin)
     res.w       =   sqrt(res.w);
     res.norm    =   sqrt(res.st(1).sn(ceil(end/2),ceil(end/2),ceil(end/2))^(-2)/prod(res.st(1).Kd));
 
-    if (dims(1) == dims(2)) && (dims(3) == 1)
-        res.PSF =   res.calcToeplitzEmbedding();
-    end
+    res.PSF =   res.calcToeplitzEmbedding();
 end
 
 function T = calcToeplitzEmbedding(a,idx)
-    %   Right now assumes square 2D matrix
-    %   Will generalise later....
+    %   
+    %   Should work on arbitrary shaped 3D [Nx, Ny, Nz] problems
+    %   
     %   Computes first column of the block-circulant embedding for the block toeplitz A'A
     %   Need to use NUFFT twice to get 2 columns of A'A to do this
     %   A'A is conjugate symmetric, but within toeplitz blocks are NOT symmetric
@@ -131,7 +130,7 @@ function T = calcToeplitzEmbedding(a,idx)
     %   Block Toeplitz T=A'A 4x4 matrix (2x2 blocks of 2x2):
     %
     %                               a b'| c'd'
-    %                               b a | e'c'
+    %                               b a | e'c'      
     %                               --- + ---
     %                               c e | a b' 
     %                               d c | b a
@@ -222,28 +221,250 @@ function T = calcToeplitzEmbedding(a,idx)
     %   Once constructed, then A'A*x can be computed via iFFT(FFT(PSF).*FFT(padarray(x)))
     %   This greatly speeds up computation of A'Ax, from O(N^2) to O(N log N)
 
+    %       Explicit 3D example (2x2x2) 
+    %       Symmetric 3-level 8x8 block Toeplitz A'A matrix
+    %       
+    %       a b'| c'd'| f'j'| l'n'
+    %       b a | e'c'| g'f'| m'l'
+    %       --- + --- + --- + ---
+    %       c e | a b'| h'k'| f'j'
+    %       d c | b a | i'h'| g'f'
+    %       --- + --- + --- + ---
+    %       f g | h i | a b'| c'd'
+    %       j f | k h | b a | e'c'
+    %       --- + --- + --- + ---
+    %       l m | f g | c e | a b'
+    %       n l | j f | d c | b a
+    %
+    %       Step 1 of circulant embedding:
+    %       Circulant embed each of the lowest scale 2x2 Toeplitz blocks 
+    %       (2x8) x (2x8)
+    %
+    %       a b'0 b | c'd'0 e'| f'j'0 g'| l'n'0 m'
+    %       b a b'0 | e'c'd'0 | g'f'j'0 | m'l'n'0
+    %       0 b a b'| 0 e'c'd'| 0 g'f'j'| 0 m'l'n'
+    %       b'0 b a | d'0 e'c'| j'0 g'f'| n'0 m'l'
+    %       ------- + ------- + ------- + -------
+    %       c e 0 d | a b'0 b | h'k'0 i'| f'j'0 g'
+    %       d c e 0 | b a b'0 | i'h'k'0 | g'f'j'0 
+    %       0 d c e | 0 b a b'| 0 i'h'k'| 0 g'f'j'
+    %       e 0 d c | b'0 b a | k'0 i'h'| j'0 g'f'
+    %       ------- + ------- + ------- + -------
+    %       f g 0 j | h i 0 k | a b'0 b | c'd'0 e'
+    %       j f g 0 | k h i 0 | b a b'0 | e'c'd'0 
+    %       0 j f g | 0 k h i | 0 b a b'| 0 e'c'd'
+    %       g 0 j f | i 0 k h | b'0 b a | d'0 e'c'
+    %       ------- + ------- + ------- + ------- 
+    %       l m 0 n | f g 0 j | c e 0 d | a b'0 b 
+    %       n l m 0 | j f g 0 | d c e 0 | b a b'0 
+    %       0 n l m | 0 j f g | 0 d c e | 0 b a b'
+    %       m 0 n l | g 0 j f | e 0 d c | b'0 b a 
+    %
+    %       Step 2 of circulant embedding:
+    %       Circulant embed each of the second level 8x8 block Toeplitz blocks
+    %       (4x8) x (4x8)
+    %
+    %       a b'0 b   c'd'0 e'  0 0 0 0   c e 0 d | f'j'0 g'  l'n'0 m'  0 0 0 0   h'k'0 i'
+    %       b a b'0   e'c'd'0   0 0 0 0   d c e 0 | g'f'j'0   m'l'n'0   0 0 0 0   i'h'k'0 
+    %       0 b a b'  0 e'c'd'  0 0 0 0   0 d c e | 0 g'f'j'  0 m'l'n'  0 0 0 0   0 i'h'k'
+    %       b'0 b a   d'0 e'c'  0 0 0 0   e 0 d c | j'0 g'f'  n'0 m'l'  0 0 0 0   k'0 i'h'
+    %                                             |                                      
+    %       c e 0 d   a b'0 b   c'd'0 e   0 0 0 0 | h'k'0 i'  f'j'0 g'  l'n'0 m'  0 0 0 0
+    %       d c e 0   b a b'0   e'c'd'0   0 0 0 0 | i'h'k'0   g'f'j'0   m'l'n'0   0 0 0 0
+    %       0 d c e   0 b a b'  0 e'c'd   0 0 0 0 | 0 i'h'k'  0 g'f'j'  0 m'l'n'  0 0 0 0
+    %       e 0 d c   b'0 b a   d'0 e'c   0 0 0 0 | k'0 i'h'  j'0 g'f'  n'0 m'l'  0 0 0 0
+    %                                             |                                       
+    %       0 0 0 0   c e 0 d   a b'0 b   c'd'0 e | f'j'0 g'  l'n'0 m'  0 0 0 0   h'k'0 i'
+    %       0 0 0 0   d c e 0   b a b'0   e'c'd'0 | g'f'j'0   m'l'n'0   0 0 0 0   i'h'k'0 
+    %       0 0 0 0   0 d c e   0 b a b'  0 e'c'd | 0 g'f'j'  0 m'l'n'  0 0 0 0   0 i'h'k'
+    %       0 0 0 0   e 0 d c   b'0 b a   d'0 e'c | j'0 g'f'  n'0 m'l'  0 0 0 0   k'0 i'h'
+    %                                             |                                        
+    %       c'd'0 e'  0 0 0 0   c e 0 d   a b'0 b | l'n'0 m'  0 0 0 0   h'k'0 i'  f'j'0 g'
+    %       e'c'd'0   0 0 0 0   d c e 0   b a b'0 | m'l'n'0   0 0 0 0   i'h'k'0   g'f'j'0 
+    %       0 e'c'd'  0 0 0 0   0 d c e   0 b a b'| 0 m'l'n'  0 0 0 0   0 i'h'k'  0 g'f'j'
+    %       d'0 e'c'  0 0 0 0   e 0 d c   b'0 b a | n'0 m'l'  0 0 0 0   k'0 i'h'  j'0 g'f'
+    %       ------------------------------------- + -------------------------------------  
+    %       f g 0 j   h i 0 k   0 0 0 0   l m 0 n | a b'0 b   c'd'0 e'  0 0 0 0   c e 0 d
+    %       j f g 0   k h i 0   0 0 0 0   n l m 0 | b a b'0   e'c'd'0   0 0 0 0   d c e 0
+    %       0 j f g   0 k h i   0 0 0 0   0 n l m | 0 b a b'  0 e'c'd'  0 0 0 0   0 d c e
+    %       g 0 j f   i 0 k h   0 0 0 0   m 0 n l | b'0 b a   d'0 e'c'  0 0 0 0   e 0 d c
+    %                                             |                                        
+    %       l m 0 n   f g 0 j   h i 0 k   0 0 0 0 | c e 0 d   a b'0 b   c'd'0 e   0 0 0 0
+    %       n l m 0   j f g 0   k h i 0   0 0 0 0 | d c e 0   b a b'0   e'c'd'0   0 0 0 0
+    %       0 n l m   0 j f g   0 k h i   0 0 0 0 | 0 d c e   0 b a b'  0 e'c'd   0 0 0 0
+    %       m 0 n l   g 0 j f   i 0 k h   0 0 0 0 | e 0 d c   b'0 b a   d'0 e'c   0 0 0 0
+    %                                             |                                        
+    %       0 0 0 0   l m 0 n   f g 0 j   h i 0 k | 0 0 0 0   c e 0 d   a b'0 b   c'd'0 e
+    %       0 0 0 0   n l m 0   j f g 0   k h i 0 | 0 0 0 0   d c e 0   b a b'0   e'c'd'0
+    %       0 0 0 0   0 n l m   0 j f g   0 k h i | 0 0 0 0   0 d c e   0 b a b'  0 e'c'd
+    %       0 0 0 0   m 0 n l   g 0 j f   i 0 k h | 0 0 0 0   e 0 d c   b'0 b a   d'0 e'c
+    %                                             |                                        
+    %       h i 0 k   0 0 0 0   l m 0 n   f g 0 j | c'd'0 e'  0 0 0 0   c e 0 d   a b'0 b
+    %       k h i 0   0 0 0 0   n l m 0   j f g 0 | e'c'd'0   0 0 0 0   d c e 0   b a b'0
+    %       0 k h i   0 0 0 0   0 n l m   0 j f g | 0 e'c'd'  0 0 0 0   0 d c e   0 b a b
+    %       i 0 k h   0 0 0 0   m 0 n l   g 0 j f | d'0 e'c'  0 0 0 0   e 0 d c   b'0 b a
+    %
+    %       Step 3 of circulant embedding:
+    %       Circulant embed the third level 16x16 block Toeplitz blocks
+    %       (8x8) x (8x8)
+    %
+    %       a b'0 b   c'd'0 e'  0 0 0 0   c e 0 d | f'j'0 g'  l'n'0 m'  0 0 0 0   h'k'0 i'| 0 0 0 0   0 0 0 0   0 0 0 0   0 0 0 0 | f g 0 j   h i 0 k   0 0 0 0   l m 0 n
+    %       b a b'0   e'c'd'0   0 0 0 0   d c e 0 | g'f'j'0   m'l'n'0   0 0 0 0   i'h'k'0 | 0 0 0 0   0 0 0 0   0 0 0 0   0 0 0 0 | j f g 0   k h i 0   0 0 0 0   n l m 0
+    %       0 b a b'  0 e'c'd'  0 0 0 0   0 d c e | 0 g'f'j'  0 m'l'n'  0 0 0 0   0 i'h'k'| 0 0 0 0   0 0 0 0   0 0 0 0   0 0 0 0 | 0 j f g   0 k h i   0 0 0 0   0 n l m
+    %       b'0 b a   d'0 e'c'  0 0 0 0   e 0 d c | j'0 g'f'  n'0 m'l'  0 0 0 0   k'0 i'h'| 0 0 0 0   0 0 0 0   0 0 0 0   0 0 0 0 | g 0 j f   i 0 k h   0 0 0 0   m 0 n l
+    %                                             |                                       |                                       |                                      
+    %       c e 0 d   a b'0 b   c'd'0 e   0 0 0 0 | h'k'0 i'  f'j'0 g'  l'n'0 m'  0 0 0 0 | 0 0 0 0   0 0 0 0   0 0 0 0   0 0 0 0 | l m 0 n   f g 0 j   h i 0 k   0 0 0 0
+    %       d c e 0   b a b'0   e'c'd'0   0 0 0 0 | i'h'k'0   g'f'j'0   m'l'n'0   0 0 0 0 | 0 0 0 0   0 0 0 0   0 0 0 0   0 0 0 0 | n l m 0   j f g 0   k h i 0   0 0 0 0
+    %       0 d c e   0 b a b'  0 e'c'd   0 0 0 0 | 0 i'h'k'  0 g'f'j'  0 m'l'n'  0 0 0 0 | 0 0 0 0   0 0 0 0   0 0 0 0   0 0 0 0 | 0 n l m   0 j f g   0 k h i   0 0 0 0
+    %       e 0 d c   b'0 b a   d'0 e'c   0 0 0 0 | k'0 i'h'  j'0 g'f'  n'0 m'l'  0 0 0 0 | 0 0 0 0   0 0 0 0   0 0 0 0   0 0 0 0 | m 0 n l   g 0 j f   i 0 k h   0 0 0 0
+    %                                             |                                       |                                       |                                      
+    %       0 0 0 0   c e 0 d   a b'0 b   c'd'0 e | f'j'0 g'  l'n'0 m'  0 0 0 0   h'k'0 i'| 0 0 0 0   0 0 0 0   0 0 0 0   0 0 0 0 | 0 0 0 0   l m 0 n   f g 0 j   h i 0 k
+    %       0 0 0 0   d c e 0   b a b'0   e'c'd'0 | g'f'j'0   m'l'n'0   0 0 0 0   i'h'k'0 | 0 0 0 0   0 0 0 0   0 0 0 0   0 0 0 0 | 0 0 0 0   n l m 0   j f g 0   k h i 0
+    %       0 0 0 0   0 d c e   0 b a b'  0 e'c'd | 0 g'f'j'  0 m'l'n'  0 0 0 0   0 i'h'k'| 0 0 0 0   0 0 0 0   0 0 0 0   0 0 0 0 | 0 0 0 0   0 n l m   0 j f g   0 k h i
+    %       0 0 0 0   e 0 d c   b'0 b a   d'0 e'c | j'0 g'f'  n'0 m'l'  0 0 0 0   k'0 i'h'| 0 0 0 0   0 0 0 0   0 0 0 0   0 0 0 0 | 0 0 0 0   m 0 n l   g 0 j f   i 0 k h
+    %                                             |                                       |                                       |                                      
+    %       c'd'0 e'  0 0 0 0   c e 0 d   a b'0 b | l'n'0 m'  0 0 0 0   h'k'0 i'  f'j'0 g'| 0 0 0 0   0 0 0 0   0 0 0 0   0 0 0 0 | h i 0 k   0 0 0 0   l m 0 n   f g 0 j
+    %       e'c'd'0   0 0 0 0   d c e 0   b a b'0 | m'l'n'0   0 0 0 0   i'h'k'0   g'f'j'0 | 0 0 0 0   0 0 0 0   0 0 0 0   0 0 0 0 | k h i 0   0 0 0 0   n l m 0   j f g 0
+    %       0 e'c'd'  0 0 0 0   0 d c e   0 b a b'| 0 m'l'n'  0 0 0 0   0 i'h'k'  0 g'f'j'| 0 0 0 0   0 0 0 0   0 0 0 0   0 0 0 0 | 0 k h i   0 0 0 0   0 n l m   0 j f g
+    %       d'0 e'c'  0 0 0 0   e 0 d c   b'0 b a | n'0 m'l'  0 0 0 0   k'0 i'h'  j'0 g'f'| 0 0 0 0   0 0 0 0   0 0 0 0   0 0 0 0 | i 0 k h   0 0 0 0   m 0 n l   g 0 j f
+    %       ------------------------------------- + ------------------------------------- + ------------------------------------- + -------------------------------------
+    %       f g 0 j   h i 0 k   0 0 0 0   l m 0 n | a b'0 b   c'd'0 e'  0 0 0 0   c e 0 d | f'j'0 g'  l'n'0 m'  0 0 0 0   h'k'0 i'| 0 0 0 0   0 0 0 0   0 0 0 0   0 0 0 0
+    %       j f g 0   k h i 0   0 0 0 0   n l m 0 | b a b'0   e'c'd'0   0 0 0 0   d c e 0 | g'f'j'0   m'l'n'0   0 0 0 0   i'h'k'0 | 0 0 0 0   0 0 0 0   0 0 0 0   0 0 0 0
+    %       0 j f g   0 k h i   0 0 0 0   0 n l m | 0 b a b'  0 e'c'd'  0 0 0 0   0 d c e | 0 g'f'j'  0 m'l'n'  0 0 0 0   0 i'h'k'| 0 0 0 0   0 0 0 0   0 0 0 0   0 0 0 0
+    %       g 0 j f   i 0 k h   0 0 0 0   m 0 n l | b'0 b a   d'0 e'c'  0 0 0 0   e 0 d c | j'0 g'f'  n'0 m'l'  0 0 0 0   k'0 i'h'| 0 0 0 0   0 0 0 0   0 0 0 0   0 0 0 0
+    %                                             |                                       |                                       |                                      
+    %       l m 0 n   f g 0 j   h i 0 k   0 0 0 0 | c e 0 d   a b'0 b   c'd'0 e   0 0 0 0 | h'k'0 i'  f'j'0 g'  l'n'0 m'  0 0 0 0 | 0 0 0 0   0 0 0 0   0 0 0 0   0 0 0 0
+    %       n l m 0   j f g 0   k h i 0   0 0 0 0 | d c e 0   b a b'0   e'c'd'0   0 0 0 0 | i'h'k'0   g'f'j'0   m'l'n'0   0 0 0 0 | 0 0 0 0   0 0 0 0   0 0 0 0   0 0 0 0
+    %       0 n l m   0 j f g   0 k h i   0 0 0 0 | 0 d c e   0 b a b'  0 e'c'd   0 0 0 0 | 0 i'h'k'  0 g'f'j'  0 m'l'n'  0 0 0 0 | 0 0 0 0   0 0 0 0   0 0 0 0   0 0 0 0
+    %       m 0 n l   g 0 j f   i 0 k h   0 0 0 0 | e 0 d c   b'0 b a   d'0 e'c   0 0 0 0 | k'0 i'h'  j'0 g'f'  n'0 m'l'  0 0 0 0 | 0 0 0 0   0 0 0 0   0 0 0 0   0 0 0 0
+    %                                             |                                       |                                       |                                      
+    %       0 0 0 0   l m 0 n   f g 0 j   h i 0 k | 0 0 0 0   c e 0 d   a b'0 b   c'd'0 e | f'j'0 g'  l'n'0 m'  0 0 0 0   h'k'0 i'| 0 0 0 0   0 0 0 0   0 0 0 0   0 0 0 0
+    %       0 0 0 0   n l m 0   j f g 0   k h i 0 | 0 0 0 0   d c e 0   b a b'0   e'c'd'0 | g'f'j'0   m'l'n'0   0 0 0 0   i'h'k'0 | 0 0 0 0   0 0 0 0   0 0 0 0   0 0 0 0
+    %       0 0 0 0   0 n l m   0 j f g   0 k h i | 0 0 0 0   0 d c e   0 b a b'  0 e'c'd | 0 g'f'j'  0 m'l'n'  0 0 0 0   0 i'h'k'| 0 0 0 0   0 0 0 0   0 0 0 0   0 0 0 0
+    %       0 0 0 0   m 0 n l   g 0 j f   i 0 k h | 0 0 0 0   e 0 d c   b'0 b a   d'0 e'c | j'0 g'f'  n'0 m'l'  0 0 0 0   k'0 i'h'| 0 0 0 0   0 0 0 0   0 0 0 0   0 0 0 0
+    %                                             |                                       |                                       |                                      
+    %       h i 0 k   0 0 0 0   l m 0 n   f g 0 j | c'd'0 e'  0 0 0 0   c e 0 d   a b'0 b | l'n'0 m'  0 0 0 0   h'k'0 i'  f'j'0 g'| 0 0 0 0   0 0 0 0   0 0 0 0   0 0 0 0
+    %       k h i 0   0 0 0 0   n l m 0   j f g 0 | e'c'd'0   0 0 0 0   d c e 0   b a b'0 | m'l'n'0   0 0 0 0   i'h'k'0   g'f'j'0 | 0 0 0 0   0 0 0 0   0 0 0 0   0 0 0 0
+    %       0 k h i   0 0 0 0   0 n l m   0 j f g | 0 e'c'd'  0 0 0 0   0 d c e   0 b a b | 0 m'l'n'  0 0 0 0   0 i'h'k'  0 g'f'j'| 0 0 0 0   0 0 0 0   0 0 0 0   0 0 0 0
+    %       i 0 k h   0 0 0 0   m 0 n l   g 0 j f | d'0 e'c'  0 0 0 0   e 0 d c   b'0 b a | n'0 m'l'  0 0 0 0   k'0 i'h'  j'0 g'f'| 0 0 0 0   0 0 0 0   0 0 0 0   0 0 0 0
+    %       ------------------------------------- + ------------------------------------- + ------------------------------------- + -------------------------------------
+    %       0 0 0 0   0 0 0 0   0 0 0 0   0 0 0 0 | f g 0 j   h i 0 k   0 0 0 0   l m 0 n | a b'0 b   c'd'0 e'  0 0 0 0   c e 0 d | f'j'0 g'  l'n'0 m'  0 0 0 0   h'k'0 i'
+    %       0 0 0 0   0 0 0 0   0 0 0 0   0 0 0 0 | j f g 0   k h i 0   0 0 0 0   n l m 0 | b a b'0   e'c'd'0   0 0 0 0   d c e 0 | g'f'j'0   m'l'n'0   0 0 0 0   i'h'k'0 
+    %       0 0 0 0   0 0 0 0   0 0 0 0   0 0 0 0 | 0 j f g   0 k h i   0 0 0 0   0 n l m | 0 b a b'  0 e'c'd'  0 0 0 0   0 d c e | 0 g'f'j'  0 m'l'n'  0 0 0 0   0 i'h'k'
+    %       0 0 0 0   0 0 0 0   0 0 0 0   0 0 0 0 | g 0 j f   i 0 k h   0 0 0 0   m 0 n l | b'0 b a   d'0 e'c'  0 0 0 0   e 0 d c | j'0 g'f'  n'0 m'l'  0 0 0 0   k'0 i'h'
+    %                                             |                                       |                                       |                                       
+    %       0 0 0 0   0 0 0 0   0 0 0 0   0 0 0 0 | l m 0 n   f g 0 j   h i 0 k   0 0 0 0 | c e 0 d   a b'0 b   c'd'0 e   0 0 0 0 | h'k'0 i'  f'j'0 g'  l'n'0 m'  0 0 0 0 
+    %       0 0 0 0   0 0 0 0   0 0 0 0   0 0 0 0 | n l m 0   j f g 0   k h i 0   0 0 0 0 | d c e 0   b a b'0   e'c'd'0   0 0 0 0 | i'h'k'0   g'f'j'0   m'l'n'0   0 0 0 0 
+    %       0 0 0 0   0 0 0 0   0 0 0 0   0 0 0 0 | 0 n l m   0 j f g   0 k h i   0 0 0 0 | 0 d c e   0 b a b'  0 e'c'd   0 0 0 0 | 0 i'h'k'  0 g'f'j'  0 m'l'n'  0 0 0 0 
+    %       0 0 0 0   0 0 0 0   0 0 0 0   0 0 0 0 | m 0 n l   g 0 j f   i 0 k h   0 0 0 0 | e 0 d c   b'0 b a   d'0 e'c   0 0 0 0 | k'0 i'h'  j'0 g'f'  n'0 m'l'  0 0 0 0 
+    %                                             |                                       |                                       |                                       
+    %       0 0 0 0   0 0 0 0   0 0 0 0   0 0 0 0 | 0 0 0 0   l m 0 n   f g 0 j   h i 0 k | 0 0 0 0   c e 0 d   a b'0 b   c'd'0 e | 0 0 0 0   h'k'0 i'  f'j'0 g'  l'n'0 m'
+    %       0 0 0 0   0 0 0 0   0 0 0 0   0 0 0 0 | 0 0 0 0   n l m 0   j f g 0   k h i 0 | 0 0 0 0   d c e 0   b a b'0   e'c'd'0 | 0 0 0 0   i'h'k'0   g'f'j'0   m'l'n'0 
+    %       0 0 0 0   0 0 0 0   0 0 0 0   0 0 0 0 | 0 0 0 0   0 n l m   0 j f g   0 k h i | 0 0 0 0   0 d c e   0 b a b'  0 e'c'd | 0 0 0 0   0 i'h'k'  0 g'f'j'  0 m'l'n'
+    %       0 0 0 0   0 0 0 0   0 0 0 0   0 0 0 0 | 0 0 0 0   m 0 n l   g 0 j f   i 0 k h | 0 0 0 0   e 0 d c   b'0 b a   d'0 e'c | 0 0 0 0   k'0 i'h'  j'0 g'f'  n'0 m'l'
+    %                                             |                                       |                                       |                                       
+    %       0 0 0 0   0 0 0 0   0 0 0 0   0 0 0 0 | h i 0 k   0 0 0 0   l m 0 n   f g 0 j | c'd'0 e'  0 0 0 0   c e 0 d   a b'0 b | l'n'0 m'  0 0 0 0   h'k'0 i'  f'j'0 g'
+    %       0 0 0 0   0 0 0 0   0 0 0 0   0 0 0 0 | k h i 0   0 0 0 0   n l m 0   j f g 0 | e'c'd'0   0 0 0 0   d c e 0   b a b'0 | m'l'n'0   0 0 0 0   i'h'k'0   g'f'j'0 
+    %       0 0 0 0   0 0 0 0   0 0 0 0   0 0 0 0 | 0 k h i   0 0 0 0   0 n l m   0 j f g | 0 e'c'd'  0 0 0 0   0 d c e   0 b a b | 0 m'l'n'  0 0 0 0   0 i'h'k'  0 g'f'j'
+    %       0 0 0 0   0 0 0 0   0 0 0 0   0 0 0 0 | i 0 k h   0 0 0 0   m 0 n l   g 0 j f | d'0 e'c'  0 0 0 0   e 0 d c   b'0 b a | n'0 m'l'  0 0 0 0   k'0 i'h'  j'0 g'f'
+    %       ------------------------------------- + ------------------------------------- + ------------------------------------- + -------------------------------------
+    %       f'j'0 g'  l'n'0 m'  0 0 0 0   h'k'0 i'| 0 0 0 0   0 0 0 0   0 0 0 0   0 0 0 0 | f g 0 j   h i 0 k   0 0 0 0   l m 0 n | a b'0 b   c'd'0 e'  0 0 0 0   c e 0 d
+    %       g'f'j'0   m'l'n'0   0 0 0 0   i'h'k'0 | 0 0 0 0   0 0 0 0   0 0 0 0   0 0 0 0 | j f g 0   k h i 0   0 0 0 0   n l m 0 | b a b'0   e'c'd'0   0 0 0 0   d c e 0
+    %       0 g'f'j'  0 m'l'n'  0 0 0 0   0 i'h'k'| 0 0 0 0   0 0 0 0   0 0 0 0   0 0 0 0 | 0 j f g   0 k h i   0 0 0 0   0 n l m | 0 b a b'  0 e'c'd'  0 0 0 0   0 d c e
+    %       j'0 g'f'  n'0 m'l'  0 0 0 0   k'0 i'h'| 0 0 0 0   0 0 0 0   0 0 0 0   0 0 0 0 | g 0 j f   i 0 k h   0 0 0 0   m 0 n l | b'0 b a   d'0 e'c'  0 0 0 0   e 0 d c
+    %                                             |                                       |                                       |                                      
+    %       h'k'0 i'  f'j'0 g'  l'n'0 m'  0 0 0 0 | 0 0 0 0   0 0 0 0   0 0 0 0   0 0 0 0 | l m 0 n   f g 0 j   h i 0 k   0 0 0 0 | c e 0 d   a b'0 b   c'd'0 e   0 0 0 0
+    %       i'h'k'0   g'f'j'0   m'l'n'0   0 0 0 0 | 0 0 0 0   0 0 0 0   0 0 0 0   0 0 0 0 | n l m 0   j f g 0   k h i 0   0 0 0 0 | d c e 0   b a b'0   e'c'd'0   0 0 0 0
+    %       0 i'h'k'  0 g'f'j'  0 m'l'n'  0 0 0 0 | 0 0 0 0   0 0 0 0   0 0 0 0   0 0 0 0 | 0 n l m   0 j f g   0 k h i   0 0 0 0 | 0 d c e   0 b a b'  0 e'c'd   0 0 0 0
+    %       k'0 i'h'  j'0 g'f'  n'0 m'l'  0 0 0 0 | 0 0 0 0   0 0 0 0   0 0 0 0   0 0 0 0 | m 0 n l   g 0 j f   i 0 k h   0 0 0 0 | e 0 d c   b'0 b a   d'0 e'c   0 0 0 0
+    %                                             |                                       |                                       |                                      
+    %       0 0 0 0   h'k'0 i'  f'j'0 g'  l'n'0 m'| 0 0 0 0   0 0 0 0   0 0 0 0   0 0 0 0 | 0 0 0 0   l m 0 n   f g 0 j   h i 0 k | 0 0 0 0   c e 0 d   a b'0 b   c'd'0 e
+    %       0 0 0 0   i'h'k'0   g'f'j'0   m'l'n'0 | 0 0 0 0   0 0 0 0   0 0 0 0   0 0 0 0 | 0 0 0 0   n l m 0   j f g 0   k h i 0 | 0 0 0 0   d c e 0   b a b'0   e'c'd'0
+    %       0 0 0 0   0 i'h'k'  0 g'f'j'  0 m'l'n'| 0 0 0 0   0 0 0 0   0 0 0 0   0 0 0 0 | 0 0 0 0   0 n l m   0 j f g   0 k h i | 0 0 0 0   0 d c e   0 b a b'  0 e'c'd
+    %       0 0 0 0   k'0 i'h'  j'0 g'f'  n'0 m'l'| 0 0 0 0   0 0 0 0   0 0 0 0   0 0 0 0 | 0 0 0 0   m 0 n l   g 0 j f   i 0 k h | 0 0 0 0   e 0 d c   b'0 b a   d'0 e'c
+    %                                             |                                       |                                       |                                      
+    %       l'n'0 m'  0 0 0 0   h'k'0 i'  f'j'0 g'| 0 0 0 0   0 0 0 0   0 0 0 0   0 0 0 0 | h i 0 k   0 0 0 0   l m 0 n   f g 0 j | c'd'0 e'  0 0 0 0   c e 0 d   a b'0 b
+    %       m'l'n'0   0 0 0 0   i'h'k'0   g'f'j'0 | 0 0 0 0   0 0 0 0   0 0 0 0   0 0 0 0 | k h i 0   0 0 0 0   n l m 0   j f g 0 | e'c'd'0   0 0 0 0   d c e 0   b a b'0
+    %       0 m'l'n'  0 0 0 0   0 i'h'k'  0 g'f'j'| 0 0 0 0   0 0 0 0   0 0 0 0   0 0 0 0 | 0 k h i   0 0 0 0   0 n l m   0 j f g | 0 e'c'd'  0 0 0 0   0 d c e   0 b a b
+    %       n'0 m'l'  0 0 0 0   k'0 i'h'  j'0 g'f'| 0 0 0 0   0 0 0 0   0 0 0 0   0 0 0 0 | i 0 k h   0 0 0 0   m 0 n l   g 0 j f | d'0 e'c'  0 0 0 0   e 0 d c   b'0 b a
+
     disp('Computing Toeplitz Embedding')
-    N   =   sqrt(a.msize(1));
+    Nd  =   a.Nd;
     Nt  =   a.Nt;
-    x   =   zeros(2*N,N,Nt);
-    tmp =   zeros(N);
-    tmp(1,1)    =   1;
     st  =   a.st;
     w   =   a.w.^2;
-    for t = 1:Nt
-        x(1:N,:,t)  =   nufft_adj(w(:,t).*nufft(tmp, st(t)), st(t));
-    end
-    tmp([1 N],1)    =   [0;1];
-    for t = 1:Nt
-        x([N+2:end N+1],:,t)  =   nufft_adj(w(:,t).*nufft(tmp, st(t)), st(t));
-    end
-    x(N+1,:,:)  =   0;
-    clear tmp;
 
-    T =   zeros(4*N^2,Nt);
-    T(1:2*N^2,:)  =   reshape(x,[],Nt);
-    T(2*N^2+2*N+1:end,:)  =   conj(reshape(x([1 end:-1:2],end:-1:2,:),[],Nt));
-    T =   fft2(reshape(T,2*N,2*N,[]))*a.norm^2;
+    %   Need 2^(d-1) columns of A'A
+    %   4 columns for 3D problems
+    x1  =   zeros([Nd(1) prod(Nd(2:3)) Nt]);
+    x2  =   zeros([Nd(1) prod(Nd(2:3)) Nt]);
+    x3  =   zeros([Nd(1) prod(Nd(2:3)) Nt]);
+    x4  =   zeros([Nd(1) prod(Nd(2:3)) Nt]);
+
+    T   =   zeros(8*prod(Nd), Nt);
+
+    %   First column
+    tmp =   zeros(Nd);
+    tmp(1,1,1)  =   1;
+    for t = 1:Nt
+        x1(:,:,t)   =   reshape(nufft_adj(w(:,t).*nufft(tmp, st(t)), st(t)), Nd(1), []);
+    end
+
+    %   Second column
+    tmp =   zeros(Nd);
+    tmp(end,1,1)    =   1;
+    for t = 1:Nt
+        x2(:,:,t)   =   reshape(nufft_adj(w(:,t).*nufft(tmp, st(t)), st(t)), Nd(1), []);
+        x2(end,:,t) =   0;
+    end
+
+    %   Third column
+    tmp =   zeros(Nd);
+    tmp(1,end,1)    =   1;
+    for t = 1:Nt
+        x3(:,:,t)   =   reshape(nufft_adj(w(:,t).*nufft(tmp, st(t)), st(t)), Nd(1), []);
+    end
+
+    %   Fourth column
+    tmp =   zeros(Nd);
+    tmp(end,end,1)  =   1;
+    for t = 1:Nt
+        x4(:,:,t)   =   reshape(nufft_adj(w(:,t).*nufft(tmp, st(t)), st(t)), Nd(1), []);
+        x4(end,:,t) =   0;
+    end
+
+    %   Perform first level embedding
+    M1  =   cat(1, x1, circshift(x2,1,1));
+    M2  =   cat(1, x3, circshift(x4,1,1));
+
+    clear x1 x2 x3 x4;
+
+    %   Perform second level embedding
+    M2  =   reshape(M2, [2*Nd(1) Nd(2:3) Nt]);
+    M2(:,end,:,:)   =   0;
+    M1  =   reshape(M1, [], Nd(3), Nt);
+    M2  =   reshape(M2, [], Nd(3), Nt);
+    M3  =   cat(1, M1,  circshift(M2,2*Nd(1),1));
+    
+    clear M1 M2;
+
+    %   Perform third (final) level embedding
+    M3  =   reshape(M3, 2*Nd(1), 2*Nd(2), Nd(3), Nt);
+
+    T(1:4*prod(Nd),:) = reshape(M3, [], Nt);
+
+    M3  =   circshift(flipdim(M3,3),1,3);
+    M3  =   circshift(flipdim(M3,2),1,2);
+    M3  =   circshift(flipdim(M3,1),1,1);
+
+    for i = 1
+        T(4*prod(Nd)+4*(i-1)*prod(Nd(1:2))+1:4*prod(Nd)+4*i*prod(Nd(1:2)),:)    =   0;
+    end
+    for i = 2:Nd(3)
+        T(4*prod(Nd)+4*(i-1)*prod(Nd(1:2))+1:4*prod(Nd)+4*i*prod(Nd(1:2)),:)    =   conj(reshape(M3(:,:,i,:),[],Nt));
+    end
+
+    T   =   prod(sqrt(2*Nd))*a.fftfn_ns(reshape(T,[2*Nd Nt]), 1:3)*a.norm^2;
 
 end
 
@@ -254,21 +475,17 @@ function b = mtimes2(a,b)
     %   otherwise computes by mtimes(A',mtimes(A,b))
     PSF =   a.PSF;
     Nt  =   a.Nt;
-    Nd  =   a.Nd(1:2);
+    Nd  =   a.Nd;
     S   =   a.S;
     dim =   size(b);
     b   =   reshape(b,[],Nt);
-
-    if ~isempty(PSF)
-        tmp =   zeros(2*Nd(1),2*Nd(2),1,1,a.Nc);
-        tmp2=   zeros(2*Nd(1),2*Nd(2),1,1,a.Nc);
-        for t = 1:Nt
-            tmp(1:Nd(1),1:Nd(2),1,1,:)  =  S*b(:,t); 
-            tmp2    =   ifft2(PSF(:,:,t).*fft2(tmp)); 
-            b(:,t)  =   reshape(S'*tmp2(1:Nd(1),1:Nd(2),1,1,:),[],1);
-        end
-    else
-        b   =   mtimes(a', mtimes(a, b));
+    
+    tmp =   zeros(2*Nd(1),2*Nd(2),2*Nd(3),1,a.Nc);
+    tmp2=   zeros(2*Nd(1),2*Nd(2),2*Nd(3),1,a.Nc);
+    for t = 1:Nt
+        tmp(1:Nd(1),1:Nd(2),1:Nd(3),1,:)  =  S*b(:,t); 
+        tmp2    =   a.ifftfn_ns(PSF(:,:,:,t).*a.fftfn_ns(tmp,1:3),1:3); 
+        b(:,t)  =   reshape(S'*tmp2(1:Nd(1),1:Nd(2),1:Nd(3),1,:),[],1);
     end
 
     %   Return b in the same shape it came in
