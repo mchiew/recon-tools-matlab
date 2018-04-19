@@ -48,7 +48,7 @@ function step = max_step(xfm)
     y   =   randn(xfm.msize);
     N   =   0;
     while abs(norm(y(:)) - N)/N > 1E-4
-        N   =   norm(y(:));
+        N   =   norm(y(:)); disp(1./N);
         y   =   xfm.mtimes2(y/N);
     end
     step    =   1./norm(y(:));

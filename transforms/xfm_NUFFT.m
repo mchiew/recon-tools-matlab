@@ -476,16 +476,32 @@ function b = mtimes2(a,b)
     PSF =   a.PSF;
     Nt  =   a.Nt;
     Nd  =   a.Nd;
+    Nc  =   a.Nc;
     S   =   a.S;
     dim =   size(b);
     b   =   reshape(b,[],Nt);
     
-    tmp =   zeros(2*Nd(1),2*Nd(2),2*Nd(3),1,a.Nc);
-    tmp2=   zeros(2*Nd(1),2*Nd(2),2*Nd(3),1,a.Nc);
-    for t = 1:Nt
-        tmp(1:Nd(1),1:Nd(2),1:Nd(3),1,:)  =  S*b(:,t); 
-        tmp2    =   a.ifftfn_ns(PSF(:,:,:,t).*a.fftfn_ns(tmp,1:3),1:3); 
-        b(:,t)  =   reshape(S'*tmp2(1:Nd(1),1:Nd(2),1:Nd(3),1,:),[],1);
+    if Nd(3) == 1
+    %   2D mode
+        tmp =   zeros(2*Nd(1),2*Nd(2),2*Nd(3),1,Nc);
+        tmp2=   zeros(2*Nd(1),2*Nd(2),2*Nd(3),1,Nc);
+        for t = 1:Nt
+            tmp(1:Nd(1),1:Nd(2),1:Nd(3),1,:)  =  S*b(:,t); 
+            tmp2(:,:,:,1,:) =   a.ifftfn_ns(PSF(:,:,:,t).*a.fftfn_ns(tmp(:,:,:,1,c),1:3),1:3); 
+            b(:,t)  =   reshape(S'*tmp2(1:Nd(1),1:Nd(2),1:Nd(3),1,:),[],1);
+        end
+    else
+    %   3D mode, break out coil loop for reduced memory footprint
+        for t = 1:Nt
+            out =   zeros(size(b,1),1);
+            for c = 1:Nc
+                tmp =   zeros(2*Nd(1),2*Nd(2),2*Nd(3));
+                tmp(1:Nd(1),1:Nd(2),1:Nd(3))  =  mtimes(S,b(:,t),c); 
+                tmp =   ifftn(PSF(:,:,:,t).*fftn(tmp)); 
+                out =   out + reshape(mtimes(S',tmp(1:Nd(1),1:Nd(2),1:Nd(3)),c),[],1);
+            end
+            b(:,t)  =   out;
+        end
     end
 
     %   Return b in the same shape it came in

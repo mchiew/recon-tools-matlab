@@ -1,4 +1,4 @@
-function res = cham_pock_2_xtTGV(d, xfm, niter, lambda_x, lambda_t, tol, plt_fn)
+function res = cham_pock_2_xtTGV(d, xfm, niter, lambda_x, lambda_t, tol, step, plt_fn)
 
 %   Mark Chiew
 %   Feb 2018
@@ -25,6 +25,9 @@ if nargin < 6
 tol =   1E-4;
 end
 if nargin < 7
+step = 1;
+end
+if nargin < 8
 plt_fn = [];
 end
 
@@ -37,7 +40,7 @@ q   =   zeros([xfm.Nd(1:3) xfm.Nt 10],'single');
 r2  =   zeros([xfm.Nd(1:3) xfm.Nt],'single');
 d   =   reshape(xfm'*d, [xfm.Nd(1:3) xfm.Nt]);
 
-h   =   1;                  % this is theta in Chambolle & Pock
+h   =   step;                  % this is theta in Chambolle & Pock
 t   =   h/sqrt(8);          % this is tau in Chambolle & Pock
 s   =   h/sqrt(8);          % this is sigma in Chambolle & Pock
 g   =   1;                  % this is gamma in Chambolle & Pock
@@ -50,7 +53,7 @@ update  =   inf;
 lambda      =   max(lambda_x, lambda_t);
 
 fprintf(1, '%-5s %-16s\n', 'iter','rel. update');
-while iter <= niter && update > tol
+while iter < niter && update > tol
     p   =   proj(p + s*(grad(u+h*(u-uu),lambda_x,lambda_t) - (v+h*(v-vv))), a1);
     q   =   proj(q + s*symgrad(v+h*(v-vv),lambda_x,lambda_t), a0);
     r2  =   prox(r2 - s*d + s*reshape(mtimes2(xfm, u+h*(u-uu)),[xfm.Nd(1:3) xfm.Nt]), s, lambda_t); 
@@ -92,15 +95,19 @@ function x = pgrad(x, dim, Lx, Lt)
 %    0 -1  1  0
 %    0  0 -1  1
 %    0  0  0  0
-    switch dim
-    case 1
-        x = cat(1,diff(x,1,1),zeros(1,size(x,2),size(x,3),size(x,4)))*(Lx/Lt);
-    case 2
-        x = cat(2,diff(x,1,2),zeros(size(x,1),1,size(x,3),size(x,4)))*(Lx/Lt);
-    case 3
-        x = cat(3,diff(x,1,3),zeros(size(x,1),size(x,2),1,size(x,4)))*(Lx/Lt);
-    case 4
-        x = cat(4,diff(x,1,4),zeros(size(x,1),size(x,2),size(x,3),1));
+    if size(x,dim) > 1
+        switch dim
+        case 1
+            x = cat(1,diff(x,1,1),zeros(1,size(x,2),size(x,3),size(x,4)))*(Lx/Lt);
+        case 2
+            x = cat(2,diff(x,1,2),zeros(size(x,1),1,size(x,3),size(x,4)))*(Lx/Lt);
+        case 3
+            x = cat(3,diff(x,1,3),zeros(size(x,1),size(x,2),1,size(x,4)))*(Lx/Lt);
+        case 4
+            x = cat(4,diff(x,1,4),zeros(size(x,1),size(x,2),size(x,3),1));
+        end
+    else
+        x   =   zeros(size(x));
     end
 
 %{
@@ -130,16 +137,21 @@ function x = ngrad(x,dim, Lx, Lt)
 %   -1  1  0  0
 %    0 -1  1  0
 %    0  0 -1  0
-    switch dim
-    case 1
-        x = cat(1,x(1,:,:,:),diff(x(1:end-1,:,:,:),1,1),-x(end-1,:,:,:))*(Lx/Lt);
-    case 2
-        x = cat(2,x(:,1,:,:),diff(x(:,1:end-1,:,:),1,2),-x(:,end-1,:,:))*(Lx/Lt);
-    case 3
-        x = cat(3,x(:,:,1,:),diff(x(:,:,1:end-1,:),1,3),-x(:,:,end-1,:))*(Lx/Lt);
-    case 4
-        x = cat(4,x(:,:,:,1),diff(x(:,:,:,1:end-1),1,4),-x(:,:,:,end-1));
+    if size(x,dim) > 1
+        switch dim
+        case 1
+            x = cat(1,x(1,:,:,:),diff(x(1:end-1,:,:,:),1,1),-x(end-1,:,:,:))*(Lx/Lt);
+        case 2
+            x = cat(2,x(:,1,:,:),diff(x(:,1:end-1,:,:),1,2),-x(:,end-1,:,:))*(Lx/Lt);
+        case 3
+            x = cat(3,x(:,:,1,:),diff(x(:,:,1:end-1,:),1,3),-x(:,:,end-1,:))*(Lx/Lt);
+        case 4
+            x = cat(4,x(:,:,:,1),diff(x(:,:,:,1:end-1),1,4),-x(:,:,:,end-1));
+        end
+    else
+        x   =   zeros(size(x));
     end
+
     
 %{
 %   Cyclic adjoint
