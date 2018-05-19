@@ -1,4 +1,4 @@
-function res = cham_pock_2_xtTGV(d, xfm, niter, lambda_x, lambda_t, tol, step, plt_fn)
+function res = cham_pock_2_xtTGV(d, xfm, niter, lambda_x, lambda_t, tol, step, gamma, plt_fn)
 
 %   Mark Chiew
 %   Feb 2018
@@ -28,6 +28,9 @@ if nargin < 7
 step = 1;
 end
 if nargin < 8
+gamma = 1;
+end
+if nargin < 9
 plt_fn = [];
 end
 
@@ -40,10 +43,10 @@ q   =   zeros([xfm.Nd(1:3) xfm.Nt 10],'single');
 r2  =   zeros([xfm.Nd(1:3) xfm.Nt],'single');
 d   =   reshape(d, [xfm.Nd(1:3) xfm.Nt]);
 
-h   =   step;                  % this is theta in Chambolle & Pock
-t   =   h/sqrt(8);          % this is tau in Chambolle & Pock
-s   =   h/sqrt(8);          % this is sigma in Chambolle & Pock
-g   =   1;                  % this is gamma in Chambolle & Pock
+h   =   0;                  % this is theta in Chambolle & Pock
+t   =   step;               % this is tau in Chambolle & Pock
+s   =   step;               % this is sigma in Chambolle & Pock
+g   =   gamma;              % this is gamma in Chambolle & Pock
 a1  =   1;
 a0  =   2;
 
