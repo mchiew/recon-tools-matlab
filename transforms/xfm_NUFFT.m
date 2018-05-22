@@ -46,8 +46,11 @@ properties (SetAccess = protected, GetAccess = public)
     Jd      =   [6,6];
     Kd      =   [];
     shift   =   [];
-    st;
     PSF     =   []; % Eigenvalues of circulant embedding 
+end
+
+properties (SetAccess = public, GetAccess = public)
+    st      =   [];  
 end
 
 methods
@@ -483,12 +486,12 @@ function b = mtimes2(a,b)
     
     if Nd(3) == 1
     %   2D mode
-        tmp =   zeros(2*Nd(1),2*Nd(2),2*Nd(3),1,Nc);
-        tmp2=   zeros(2*Nd(1),2*Nd(2),2*Nd(3),1,Nc);
+        tmp =   zeros(2*Nd(1),2*Nd(2),1,1,Nc);
+        tmp2=   zeros(2*Nd(1),2*Nd(2),1,1,Nc);
         for t = 1:Nt
-            tmp(1:Nd(1),1:Nd(2),1:Nd(3),1,:)  =  S*b(:,t); 
-            tmp2(:,:,:,1,:) =   a.ifftfn_ns(PSF(:,:,:,t).*a.fftfn_ns(tmp(:,:,:,1,c),1:3),1:3); 
-            b(:,t)  =   reshape(S'*tmp2(1:Nd(1),1:Nd(2),1:Nd(3),1,:),[],1);
+            tmp(1:Nd(1),1:Nd(2),1,1,:)  =  S*b(:,t); 
+            tmp2(:,:,1,1,:) =   ifft2(PSF(:,:,1,t).*fft2(tmp)); 
+            b(:,t)  =   reshape(S'*tmp2(1:Nd(1),1:Nd(2),1,1,:),[],1);
         end
     else
     %   3D mode, break out coil loop for reduced memory footprint
