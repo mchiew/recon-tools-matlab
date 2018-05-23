@@ -112,28 +112,24 @@ end
 
 methods (Static)
 function b = fftfn(b,dims)
-    d   =   sqrt(size(b));
-    for i = intersect(1:ndims(b), dims)
-        b   =   fftshift(fft(ifftshift(b, i), [], i), i)/d(i);
+    for i = dims
+        b   =   fftshift(fft(ifftshift(b, i), [], i), i)/sqrt(size(b,i));
     end
 end
 function b = fftfn_ns(b,dims)
-    d   =   sqrt(size(b));
-    for i = intersect(1:ndims(b), dims)
-        b   =   fft(b, [], i)/d(i);
+    for i = dims
+        b   =   fft(b, [], i)/sqrt(size(b,i));
     end
 end
 
 function b = ifftfn(b,dims)
-    d   =   sqrt(size(b));
-    for i = intersect(1:ndims(b), dims)
-        b   =   fftshift(ifft(ifftshift(b, i), [], i), i)*d(i);
+    for i = dims
+        b   =   fftshift(ifft(ifftshift(b, i), [], i), i)*sqrt(size(b,i));
     end
 end
 function b = ifftfn_ns(b,dims)
-    d   =   sqrt(size(b));
-    for i = intersect(1:ndims(b), dims)
-        b   =   ifft(b, [], i)*d(i);
+    for i = dims
+        b   =   ifft(b, [], i)*sqrt(size(b,i));
     end
 end
 function x = size(b)
