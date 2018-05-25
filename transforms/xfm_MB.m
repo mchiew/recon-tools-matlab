@@ -120,31 +120,27 @@ function res = mtimes(a,b)
 
 end
 
-function b = mtimes2(a,b,nt,nx)
+function b = mtimes2(a,b,nt)
     if nargin < 3
         nt = 1:a.Nt;
     end
-    if nargin < 3
-        nx = 1:a.Nd(1);
-    end
 
-    m   =   a.mask(nx,:,:,:);
+    m   =   a.mask(:,:,:,nt);
     dim =   size(b);
     %   Forward FFT and sampling
         b   =   reshape(b, [], length(nt));
         for t = nt 
-            bb  =   mtimes(a.S,b(:,t),1:a.Nc,nx);
+            bb  =   a.S*b(:,t);
         for c = 1:a.Nc
         for s = 1:a.Ns
             %bb(:,:,s:a.Ns:end,1,c)  =   a.ifftfn_ns(a.fftfn_ns(bb(:,:,s:a.Ns:end,1,c),2:3).*m(:,:,:,t,s),2:3);
             bb(:,:,s:a.Ns:end,1,c)  =   ifft(ifft(fft(fft(bb(:,:,s:a.Ns:end,1,c),[],2),[],3).*m(:,:,:,t,s),[],2),[],3);
         end
         end
-            b(:,t)  =   reshape(mtimes(a.S',bb,1:a.Nc,nx),[],1); 
+            b(:,t)  =   reshape(a.S'*bb,[],1); 
         end
     b   =   reshape(b, dim); 
 end
-
 
 function res = mean(a,b)
     res =   zeros([prod(a.Nd)*a.Nt a.Nc]);
@@ -203,7 +199,7 @@ function b = inv(a,b)
                 [uu vv] =   ind2sub(a.Nd(2:3),reshape(find(m(i,:,:,t)),[],1));
                 F       =   exp(-1j*2*pi*((ii-1)'.*(uu-1)/a.Nd(2)+(jj-1)'.*(vv-1)/a.Nd(3)))/sqrt(prod(a.Nd(2:3)));
 
-                b(i, idx, t)=   inv((F'*F).*sd)*shiftdim(b(i,idx,t),1);
+                b(i, idx, t)=   ((F'*F).*sd)\shiftdim(b(i,idx,t),1);
             end
         end
     end
@@ -211,72 +207,73 @@ function b = inv(a,b)
 end
 
 
-function [d, g] = bias_var(a,L,shift)
-
-    nt  =   lcm(shift,a.Nd(3))/shift;
-    nyz =   prod(a.Nd(2:3));
-    d   =   zeros(nt*nyz, a.Nd(1));
-    g   =   zeros(nt*nyz, a.Nd(1));        
-    r2  =   reshape(L*[6 -4 1 zeros(1,nt-5) 1 -4],1,1,1,nt);
+function [d, g] = bias_var(a,L)
+   
+    m       =   a.mask;
+    sens    =   reshape(a.S.coils,[a.Nd(1:3) a.Nc]);    
+    d       =   zeros(prod(a.Nd(2:3))*a.Nt, a.Nd(1));
+    g       =   zeros(prod(a.Nd(2:3))*a.Nt, a.Nd(1));  
+    R2      =   sparse(toeplitz(reshape(padarray(L*[6 -4 1 zeros(1,a.Nt-5) 1 -4],[prod(a.Nd(2:3))-1 0],'post'),[],1)));
     
-    phs =   repmat(exp(1j*reshape(2*pi*(0:a.Nd(3)-1)/a.Nd(3),1,1,a.Nd(3))),nt,a.Nd(3),1);
-    for i = 1:nt
-        for j = 1:a.Nd(3)
-            phs(i,j,:)  =   circshift(phs(i,j,:).^((i-1)*shift),j-1,3);
-        end
-    end
-
-    
-    for x = 1:a.Nd(1)
+    fprintf(1,'000');
+    for i = 1:a.Nd(1)   
+        fprintf(1,'\b\b\b%03d',i);        
+        iy      =   [];
+        iz      =   [];
+        dd      =   [];
         
-        ii  =   [];
-        jj  =   [];
-        dd  =   [];
-        
-        uu  =   [];
-        vv  =   [];
-        bb  =   [];
-        
-        for k = 1:a.Nd(3)
-        for j = 1:a.Nd(2)
-            tmp         = zeros(1,a.Nd(2),a.Nd(3));
-            tmp(1,j,k)  = 1;
-            tmp2        = reshape(a.mtimes2(tmp,1,x).*phs(:,k,:),nt,[]);
-            tmp3        = tmp.*r2;
-            if nnz(tmp2)
-                for t = 1:nt
-                    [idx,jdx] = find(abs(tmp2(t,:)).'>eps);
-                    ii = [ii;idx+(t-1)*nyz];                    
-                    jj = [jj;jdx*((k-1)*a.Nd(2)+j+(t-1)*nyz)];
-                    dd = [dd;tmp2(t,idx).'];
-                end
+        idx     =   find(sens(i,:,:,1));
+        len     =   length(idx);
+        rdx     =   reshape(idx + (1:prod(a.Nd(2:3)):prod(a.Nd(2:3))*a.Nt),[],1);
+        if len
+            [ii jj] =   ind2sub(a.Nd(2:3),idx);
+            s       =   reshape(sens(i,:,:,:),[],a.Nc);
+            s       =   s(idx,:).';
+            sd  =   zeros(len);
+            for c = 1:a.Nc
+                sd  = sd + s(c,:)'*s(c,:);
             end
-            if nnz(tmp3)
-                for t = 1:nt
-                    [idx,jdx,bdx] = find(reshape(circshift(tmp3,t-1,4),[],1));
-                    uu = [uu;idx];
-                    vv = [vv;jdx*((k-1)*a.Nd(2)+j+(t-1)*nyz)];
-                    bb = [bb;bdx];
+
+            tmp=    zeros(len);
+            for t = 1:a.Nt
+                [uu vv] =   ind2sub(a.Nd(2:3),find(m(i,:,:,t)));        
+                F       =   exp(-1j*2*pi*((ii(:)-1)'.*(uu(:)-1)/a.Nd(2)+(jj(:)-1)'.*(vv(:)-1)/a.Nd(3)))/sqrt(prod(a.Nd(2:3)));
+                tmp     =   (F'*F).*sd;
+                [y z w] =   find(tmp.*(abs(tmp)>1E-6));
+                iy      =   [iy;y+(t-1)*len];
+                iz      =   [iz;z+(t-1)*len];
+                dd      =   [dd;w];
+            end
+            A   =   sparse(iy,iz,dd,len*a.Nt,len*a.Nt);
+            B   =   A + R2(rdx,rdx);            
+            
+            ind =   1:len*a.Nt;
+            while ~isempty(ind)
+                qq  =   ind(1); 
+                qL  =   0;
+                while length(qq) > qL
+                    qL  =   length(qq);
+                    qq  =   find(sum(B*B(:,qq),2));
                 end
+                Bi  =   inv(B(qq,qq));
+                C   =   Bi*A(qq,qq);
+                
+                d(rdx(qq),i)    =   real(diag(C));
+                
+                C   =   C*Bi;
+                
+                g(rdx(qq),i)    =   real(sqrt(diag(C).*diag(A(qq,qq))));     
+                
+                ind =   setdiff(ind,qq);
             end
         end
-        end
-        A   =   sparse(ii,jj,dd,nyz*nt,nyz*nt);
-        B   =   sparse([ii;uu],[jj;vv],[dd;bb],nyz*nt,nyz*nt);    
-        idx         =   find(diag(A));
-        As          =   A(idx,idx);
-        Bs          =   inv(B(idx,idx));        
-        C           =   Bs*As;    
-        d(idx,x)    =   diag(C);
-        C           =   C*Bs;
-        g(idx,x)    =   sqrt(diag(C).*diag(As));
+            
     end
-    
-    d   =   permute(reshape(d,a.Nd(2),a.Nd(3),nt,a.Nd(1)),[4,1,2,3]);
-    g   =   permute(reshape(g,a.Nd(2),a.Nd(3),nt,a.Nd(1)),[4,1,2,3]);
-    d   =   real(d(:,:,:,1));
-    g   =   real(g(:,:,:,1));
-
+    fprintf(1,'\n');    
+    d   =   reshape(d.', [a.Nd, a.Nt]);
+    d   =   d(:,:,:,1);
+    g   =   reshape(g.', [a.Nd, a.Nt]);        
+    g   =   g(:,:,:,1);    
 end
 
 

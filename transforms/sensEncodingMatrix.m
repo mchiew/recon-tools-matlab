@@ -41,32 +41,24 @@ function res = ctranspose(a)
 
 end
 
-function res = mtimes(a,b,c,x)
+function res = mtimes(a,b,c)
 
     if nargin < 3
         c   =   1:a.Nc;
     end
-    if nargin < 4
-        x   =   1:a.dims(1);
-    end
     if a.adjoint
         %res =   sum(bsxfun(@times, reshape(b, a.dims(1), a.dims(2), a.dims(3), [], length(c)), a.ccoils(:,:,:,1,c)), 5);
-        b   =   reshape(b, length(x), a.dims(2), a.dims(3), [], length(c));
-        res =   zeros([length(x) a.dims(2:3) size(b,4)]);
-        cc  =   a.ccoils(x,:,:,1,c);
+        b   =   reshape(b, a.dims(1), a.dims(2), a.dims(3), [], length(c));
+        res =   zeros([a.dims(1:3) size(b,4)]);
+        cc  =   a.ccoils(:,:,:,1,c);
         for i = 1:length(c)
             res =   res + bsxfun(@times, b(:,:,:,:,i), cc(:,:,:,1,i));
         end
     else
-        res =   bsxfun(@times, reshape(b, length(x), a.dims(2), a.dims(3), []), a.coils(x,:,:,1,c));
+        res =   bsxfun(@times, reshape(b, a.dims(1), a.dims(2), a.dims(3), []), a.coils(:,:,:,1,c));
     end
 
 end
 
-function res = mtimes_mb_adj_sens(a,res,b,step,nc)
-
-    res = res + step*sum(b.*a.ccoils(:,nc), 2);
-
-end
 end
 end
