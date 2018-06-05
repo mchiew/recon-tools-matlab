@@ -113,7 +113,7 @@ function res = xfm_NUFFT(dims, coils, fieldmap_struct, k, varargin)
                 if ~tbl
                     res.w(:,t)  =   res.w(:,t)./real(res.st(t).p*(res.st(t).p'*res.w(:,t)));
                 else
-                    res.w(:,t)  =   res.w(:,t)./real(res.st(t).interp_table(res.st(t).interp_table_adj(res.w(:,t))));
+                    res.w(:,t)  =   res.w(:,t)./real(res.st(t).interp_table(res.st(t),res.st(t).interp_table_adj(res.st(t),res.w(:,t))));
                 end
             end
         end
