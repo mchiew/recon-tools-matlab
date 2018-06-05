@@ -110,7 +110,11 @@ function res = xfm_NUFFT(dims, coils, fieldmap_struct, k, varargin)
         for t = 1:res.Nt
             res.w(:,t)  =   ones(size(k,1),1);
             for ii = 1:5
-                res.w(:,t)  =   res.w(:,t)./real(res.st(t).p*(res.st(t).p'*res.w(:,t)));
+                if ~tbl
+                    res.w(:,t)  =   res.w(:,t)./real(res.st(t).p*(res.st(t).p'*res.w(:,t)));
+                else
+                    res.w(:,t)  =   res.w(:,t)./real(res.st(t).interp_table(res.st(t).interp_table_adj(res.w(:,t))));
+                end
             end
         end
     elseif p.wi == 0
