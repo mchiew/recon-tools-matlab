@@ -215,16 +215,17 @@ function [d, g] = bias_var(a,L)
     g       =   zeros(prod(a.Nd(2:3))*a.Nt, a.Nd(1));  
     R2      =   sparse(toeplitz(reshape(padarray(L*[6 -4 1 zeros(1,a.Nt-5) 1 -4],[prod(a.Nd(2:3))-1 0],'post'),[],1)));
     
-    fprintf(1,'000');
+    for s = 1:a.Ns
+    %fprintf(1,'000');
     for i = 1:a.Nd(1)   
-        fprintf(1,'\b\b\b%03d',i);        
+        %fprintf(1,'\b\b\b%03d',i);        
         iy      =   [];
         iz      =   [];
         dd      =   [];
         
         idx     =   find(sens(i,:,:,1));
         len     =   length(idx);
-        rdx     =   reshape(idx + (1:prod(a.Nd(2:3)):prod(a.Nd(2:3))*a.Nt),[],1);
+        rdx     =   reshape(idx + (0:prod(a.Nd(2:3)):prod(a.Nd(2:3))*a.Nt-1),[],1);
         if len
             [ii jj] =   ind2sub(a.Nd(2:3),idx);
             s       =   reshape(sens(i,:,:,:),[],a.Nc);
@@ -269,7 +270,8 @@ function [d, g] = bias_var(a,L)
         end
             
     end
-    fprintf(1,'\n');    
+    %fprintf(1,'\n');    
+    end
     d   =   reshape(d.', [a.Nd, a.Nt]);
     d   =   d(:,:,:,1);
     g   =   reshape(g.', [a.Nd, a.Nt]);        
