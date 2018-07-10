@@ -47,6 +47,8 @@ properties (SetAccess = protected, GetAccess = public)
     Kd      =   [];
     shift   =   [];
     PSF     =   []; % Eigenvalues of circulant embedding 
+    tbl     =   [];
+    loop    =   [];
 end
 
 properties (SetAccess = public, GetAccess = public)
@@ -72,6 +74,7 @@ function res = xfm_NUFFT(dims, coils, fieldmap_struct, k, varargin)
     p.addParamValue('shift',    floor(dims(1:3)/2),     lengthValidator);
     p.addParamValue('mean',     true,                   @islogical);
     p.addParamValue('table',    false,                  @islogical);
+    p.addParamValue('loop',     false,                  @islogical);
 
     p.parse(varargin{:});
     p   =   p.Results;
@@ -83,12 +86,13 @@ function res = xfm_NUFFT(dims, coils, fieldmap_struct, k, varargin)
     res.k       =   k;
     res.dsize   =   [size(k,1) res.Nt res.Nc];
 
-    tbl         =   p.table;
+    res.tbl     =   p.table;
+    res.loop    =   p.loop;
 
     disp('Initialising NUFFT(s)');
     nd  =   (res.Nd(3) > 1) + 2;
     for t = res.Nt:-1:1
-        if ~tbl
+        if ~res.tbl
             st(t)   =   nufft_init(squeeze(k(:, t, 1:nd)),...
                                    res.Nd(1:nd),...
                                    p.Jd(1:nd),...
@@ -109,8 +113,8 @@ function res = xfm_NUFFT(dims, coils, fieldmap_struct, k, varargin)
     %   Use (Pipe 1999) fixed point method
         for t = 1:res.Nt
             res.w(:,t)  =   ones(size(k,1),1);
-            for ii = 1:5
-                if ~tbl
+            for ii = 1:25
+                if ~res.tbl
                     res.w(:,t)  =   res.w(:,t)./real(res.st(t).p*(res.st(t).p'*res.w(:,t)));
                 else
                     res.w(:,t)  =   res.w(:,t)./real(res.st(t).interp_table(res.st(t),res.st(t).interp_table_adj(res.st(t),res.w(:,t))));
@@ -119,7 +123,7 @@ function res = xfm_NUFFT(dims, coils, fieldmap_struct, k, varargin)
         end
     elseif p.wi == 0
         w   =   ones(size(k,1),1);
-        for ii = 1:5
+        for ii = 1:25
             w  =   w./real(res.st(t).p*(res.st(t).p'*w));
         end
     elseif isscalar(p.wi)
@@ -415,22 +419,22 @@ function T = calcToeplitzEmbedding(a,idx)
 
     %   Need 2^(d-1) columns of A'A
     %   4 columns for 3D problems
-    x1  =   zeros([Nd(1) prod(Nd(2:3)) Nt]);
-    x2  =   zeros([Nd(1) prod(Nd(2:3)) Nt]);
-    x3  =   zeros([Nd(1) prod(Nd(2:3)) Nt]);
-    x4  =   zeros([Nd(1) prod(Nd(2:3)) Nt]);
+    x1  =   zeros([Nd(1) prod(Nd(2:3)) Nt],'single');
+    x2  =   zeros([Nd(1) prod(Nd(2:3)) Nt],'single');
+    x3  =   zeros([Nd(1) prod(Nd(2:3)) Nt],'single');
+    x4  =   zeros([Nd(1) prod(Nd(2:3)) Nt],'single');
 
-    T   =   zeros(8*prod(Nd), Nt);
+    T   =   zeros(8*prod(Nd), Nt,'single');
 
     %   First column
-    tmp =   zeros(Nd);
+    tmp =   zeros(Nd,'single');
     tmp(1,1,1)  =   1;
     for t = 1:Nt
         x1(:,:,t)   =   reshape(nufft_adj(w(:,t).*nufft(tmp, st(t)), st(t)), Nd(1), []);
     end
 
     %   Second column
-    tmp =   zeros(Nd);
+    tmp =   zeros(Nd,'single');
     tmp(end,1,1)    =   1;
     for t = 1:Nt
         x2(:,:,t)   =   reshape(nufft_adj(w(:,t).*nufft(tmp, st(t)), st(t)), Nd(1), []);
@@ -438,14 +442,14 @@ function T = calcToeplitzEmbedding(a,idx)
     end
 
     %   Third column
-    tmp =   zeros(Nd);
+    tmp =   zeros(Nd,'single');
     tmp(1,end,1)    =   1;
     for t = 1:Nt
         x3(:,:,t)   =   reshape(nufft_adj(w(:,t).*nufft(tmp, st(t)), st(t)), Nd(1), []);
     end
 
     %   Fourth column
-    tmp =   zeros(Nd);
+    tmp =   zeros(Nd,'single');
     tmp(end,end,1)  =   1;
     for t = 1:Nt
         x4(:,:,t)   =   reshape(nufft_adj(w(:,t).*nufft(tmp, st(t)), st(t)), Nd(1), []);
@@ -454,9 +458,10 @@ function T = calcToeplitzEmbedding(a,idx)
 
     %   Perform first level embedding
     M1  =   cat(1, x1, circshift(x2,1,1));
+    clear x1 x2;
     M2  =   cat(1, x3, circshift(x4,1,1));
+    clear x3 x4;
 
-    clear x1 x2 x3 x4;
 
     %   Perform second level embedding
     M2  =   reshape(M2, [2*Nd(1) Nd(2:3) Nt]);
@@ -541,7 +546,13 @@ function res = mtimes(a,b,idx)
         res =   zeros([a.Nd, nt a.Nc]);
         b   =   bsxfun(@times, b, a.w(:,idx));
         for t = 1:nt
-            res(:,:,:,t,:)  =   nufft_adj(squeeze(b(:,t,:)), st(t));
+            if a.tbl || a.loop
+                for c = 1:a.Nc
+                    res(:,:,:,t,c)  =   nufft_adj(squeeze(b(:,t,c)), st(t));
+                end
+            else
+                res(:,:,:,t,:)  =   nufft_adj(squeeze(b(:,t,:)), st(t));
+            end
         end
         res =   reshape(a.norm*(a.S'*res), [], nt);
     else
@@ -549,7 +560,13 @@ function res = mtimes(a,b,idx)
         res =   zeros([a.dsize(1) nt a.dsize(3)]);
         tmp =   a.norm*(a.S*b);
         for t = 1:nt
-            res(:,t,:)  =   nufft(squeeze(tmp(:,:,:,t,:)), st(t));
+            if a.tbl || a.loop
+                for c = 1:a.Nc
+                    res(:,t,c)  =   nufft(squeeze(tmp(:,:,:,t,c)), st(t));
+                end
+            else
+                res(:,t,:)  =   nufft(squeeze(tmp(:,:,:,t,:)), st(t));
+            end
         end
         res =   bsxfun(@times, res, a.w(:,idx));
     end
