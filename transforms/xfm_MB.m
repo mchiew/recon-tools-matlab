@@ -207,13 +207,20 @@ function b = inv(a,b)
 end
 
 
-function [d, g] = bias_var(a,L)
-   
+function [d, g] = bias_var(a,L,ord)
+
     m       =   a.mask;
     sens    =   reshape(a.S.coils,[a.Nd(1:3) a.Nc]);    
     d       =   zeros(prod(a.Nd(2:3))*a.Nt, a.Nd(1));
     g       =   zeros(prod(a.Nd(2:3))*a.Nt, a.Nd(1));  
-    R2      =   sparse(toeplitz(reshape(padarray(L*[6 -4 1 zeros(1,a.Nt-5) 1 -4],[prod(a.Nd(2:3))-1 0],'post'),[],1)));
+    switch ord
+        case 0
+            R   =   sparse(prod(a.Nd(2:3))*a.Nt,prod(a.Nd(2:3))*a.Nt);
+        case 1
+            R   =   sptoeplitz(reshape(padarray(L*[2 -1 zeros(1,a.Nt-3) -1],[prod(a.Nd(2:3))-1 0],'post'),[],1));
+        case 2
+            R   =   sptoeplitz(reshape(padarray(L*[6 -4 1 zeros(1,a.Nt-5) 1 -4],[prod(a.Nd(2:3))-1 0],'post'),[],1));
+    end
     
     for s = 1:a.Ns
     %fprintf(1,'\n000');
@@ -246,7 +253,7 @@ function [d, g] = bias_var(a,L)
                 dd      =   [dd;w];
             end
             A   =   sparse(iy,iz,dd,len*a.Nt,len*a.Nt);
-            B   =   A + R2(rdx,rdx);            
+            B   =   A + R(rdx,rdx);            
             
             ind =   1:len*a.Nt;
             while ~isempty(ind)
@@ -256,17 +263,15 @@ function [d, g] = bias_var(a,L)
                     qL  =   length(qq);
                     qq  =   find(sum(B*B(:,qq),2));
                 end
+
                 BB  =   inv(B(qq,qq));
-                %C   =   BB\A(qq,qq);
                 C   =   BB*A(qq,qq);
                 
                 d(rdx(qq),i)    =   real(diag(C));
                 
-                %C   =   C/BB;
-                C   =   sum(C.*BB',2);
-                %g(rdx(qq),i)    =   real(sqrt(diag(C).*diag(A(qq,qq))));     
+                C   =   sum(C.*BB.',2);
                 g(rdx(qq),i)    =   real(sqrt(C.*diag(A(qq,qq))));     
-                
+
                 ind =   setdiff(ind,qq);
             end
         end
