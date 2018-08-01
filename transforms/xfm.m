@@ -43,13 +43,18 @@ function a = ctranspose(a)
     a.adjoint   = xor(a.adjoint,1);    
 end
 
-function step = max_step(xfm)
+function step = max_step(xfm,iters)
+    if nargin < 2
+        iters = inf;
+    end
     %   Use the power method to find the max eigenvalue of E'E
     y   =   randn(xfm.msize);
     N   =   0;
-    while abs(norm(y(:)) - N)/N > 1E-4
+    ii  =   0;
+    while abs(norm(y(:)) - N)/N > 1E-4 && ii < iters
         N   =   norm(y(:)); disp(1./N);
         y   =   xfm.mtimes2(y/N);
+        ii  =   ii+1;
     end
     step    =   1./norm(y(:));
 end
