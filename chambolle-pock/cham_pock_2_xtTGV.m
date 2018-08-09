@@ -44,8 +44,8 @@ r2  =   zeros([xfm.Nd(1:3) xfm.Nt],'single');
 d   =   reshape(d, [xfm.Nd(1:3) xfm.Nt]);
 
 h   =   0;                  % this is theta in Chambolle & Pock
-t   =   step;               % this is tau in Chambolle & Pock
-s   =   step;               % this is sigma in Chambolle & Pock
+t   =   step/sqrt(8);               % this is tau in Chambolle & Pock
+s   =   step/sqrt(8);               % this is sigma in Chambolle & Pock
 g   =   gamma;              % this is gamma in Chambolle & Pock
 a1  =   1;
 a0  =   2;
@@ -219,7 +219,7 @@ function y = symgrad(x,Lx,Lt)
 %                            [0  0  Gt Gz]
 %   
 %   4->10
-    y   =   zeros([size(x,1) size(x,2) size(x,3) size(x,4) 10]);
+    y   =   zeros([size(x,1) size(x,2) size(x,3) size(x,4) 10],'single');
     
     y(:,:,:,:,1) =      pgrad(x(:,:,:,:,1),1,Lx,Lt);
     y(:,:,:,:,2) =                                  pgrad(x(:,:,:,:,2),2,Lx,Lt);
@@ -260,7 +260,7 @@ function y = symdiv(x,Lx,Lt)
 %   to symgrad is due to the definition of the inner product in the symgrad domain
 %   See Bredies et al. for details
 %
-    y   =   zeros([size(x,1) size(x,2) size(x,3) size(x,4) 4]);
+    y   =   zeros([size(x,1) size(x,2) size(x,3) size(x,4) 4],'single');
 
     y(:,:,:,:,1) = ngrad(x(:,:,:,:,1),1,Lx,Lt) + ngrad(x(:,:,:,:,5),2,Lx,Lt) + ngrad(x(:,:,:,:,6),3,Lx,Lt) + ngrad(x(:,:,:,:,7),4,Lx,Lt);
     y(:,:,:,:,2) = ngrad(x(:,:,:,:,2),2,Lx,Lt) + ngrad(x(:,:,:,:,5),1,Lx,Lt) + ngrad(x(:,:,:,:,8),3,Lx,Lt) + ngrad(x(:,:,:,:,9),4,Lx,Lt);
