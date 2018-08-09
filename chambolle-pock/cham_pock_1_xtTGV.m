@@ -1,4 +1,4 @@
-function res = cham_pock_1_xtTGV_Toep(d, xfm, T, niter, lambda_x, lambda_t, tol, plt_fn, u)
+function res = cham_pock_1_xtTGV(d, xfm, niter, lambda_x, lambda_t, tol, plt_fn)
 
 %   Mark Chiew
 %   Feb 2018
@@ -23,18 +23,15 @@ end
 if nargin < 8
 plt_fn = [];
 end
-if nargin < 9
-u   =   zeros([xfm.Nd(1:2) xfm.Nt],'single');
-uu  =   zeros([xfm.Nd(1:2) xfm.Nt],'single');
-else
-uu  =   u;
-end
-v   =   zeros([xfm.Nd(1:2) xfm.Nt 3],'single');
-vv  =   zeros([xfm.Nd(1:2) xfm.Nt 3],'single');
-p   =   zeros([xfm.Nd(1:2) xfm.Nt 3],'single');
-q   =   zeros([xfm.Nd(1:2) xfm.Nt 6],'single');
-r2  =   zeros([xfm.Nd(1:2) xfm.Nt],'single');
-d   =   reshape(xfm'*d, [xfm.Nd(1:2) xfm.Nt]);
+
+u   =   zeros([xfm.Nd(1:3) xfm.Nt],'single');
+uu  =   zeros([xfm.Nd(1:3) xfm.Nt],'single');
+v   =   zeros([xfm.Nd(1:3) xfm.Nt 4],'single');
+vv  =   zeros([xfm.Nd(1:3) xfm.Nt 4],'single');
+p   =   zeros([xfm.Nd(1:3) xfm.Nt 4],'single');
+q   =   zeros([xfm.Nd(1:3) xfm.Nt 10],'single');
+r2  =   zeros([xfm.Nd(1:3) xfm.Nt],'single');
+d   =   reshape(d, [xfm.Nd(1:3) xfm.Nt]);
 
 t   =   1/abs(T(1));
 s   =   1/abs(T(1));
