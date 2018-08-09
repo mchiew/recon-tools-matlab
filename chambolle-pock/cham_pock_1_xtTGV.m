@@ -1,4 +1,4 @@
-function res = cham_pock_1_xtTGV_Toep(d, xfm, niter, lambda_x, lambda_t, tol, step, plt_fn)
+function res = cham_pock_1_xtTGV(d, xfm, niter, lambda_x, lambda_t, tol, plt_fn)
 
 %   Mark Chiew
 %   Feb 2018
