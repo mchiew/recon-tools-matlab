@@ -207,12 +207,15 @@ function b = inv(a,b)
 end
 
 
-function [d, g] = bias_var(a,L,ord)
+function [d, g, d_post, g_post] = bias_var(a,L,ord)
 
     m       =   a.mask;
     sens    =   reshape(a.S.coils,[a.Nd(1:3) a.Nc]);    
     d       =   zeros(prod(a.Nd(2:3))*a.Nt, a.Nd(1));
     g       =   zeros(prod(a.Nd(2:3))*a.Nt, a.Nd(1));  
+    d_post  =   zeros(size(d));
+    g_post  =   zeros(size(g));
+
     switch ord
         case 0
             R   =   sparse(prod(a.Nd(2:3))*a.Nt,prod(a.Nd(2:3))*a.Nt);
@@ -252,9 +255,10 @@ function [d, g] = bias_var(a,L,ord)
                 iz      =   [iz;z+(t-1)*len];
                 dd      =   [dd;w];
             end
+            RR  =   R(rdx,rdx);
             A   =   sparse(iy,iz,dd,len*a.Nt,len*a.Nt);
-            B   =   A + R(rdx,rdx);            
-            
+            B   =   A + RR;
+
             ind =   1:len*a.Nt;
             while ~isempty(ind)
                 qq  =   ind(1); 
@@ -266,11 +270,19 @@ function [d, g] = bias_var(a,L,ord)
 
                 BB  =   inv(B(qq,qq));
                 C   =   BB*A(qq,qq);
-                
+
                 d(rdx(qq),i)    =   real(diag(C));
                 
                 C   =   sum(C.*BB.',2);
                 g(rdx(qq),i)    =   real(sqrt(C.*diag(A(qq,qq))));     
+
+                DD  =   inv(eye(length(qq)) + RR(qq,qq));
+
+                d_post(rdx(qq),i)   =   real(diag(DD));
+
+                DD  =   diag(DD*inv(A(qq,qq))*DD);
+                g_post(rdx(qq),i)   =   real(sqrt(DD.*diag(A(qq,qq))));
+                
 
                 ind =   setdiff(ind,qq);
             end
@@ -283,6 +295,12 @@ function [d, g] = bias_var(a,L,ord)
     d   =   d(:,:,:,1);
     g   =   reshape(g.', [a.Nd, a.Nt]);        
     g   =   g(:,:,:,1);    
+
+    %d_post  =   (1-2*L)*ones(size(d));
+    d_post  =   reshape(d_post.', [a.Nd, a.Nt]);
+    d_post  =   d_post(:,:,:,1);
+    g_post  =   reshape(g_post.', [a.Nd, a.Nt]);
+    g_post  =   g_post(:,:,:,1);
 end
 
 
