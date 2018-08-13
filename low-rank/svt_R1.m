@@ -1,4 +1,4 @@
-function est = svt_R1(xfm, samp, varargin)
+function est = svt_R1(xfm, d, varargin)
 %function [est, err, fErr] = iht_ms(xfm, samp, rank, step, shrink, maxIter,...
 %                                   errTol, minUpdate, truth, est)
 %
@@ -40,7 +40,7 @@ p       =   inputParser;
 msize   =   xfm.msize;
 
 p.addRequired('xfm');
-p.addRequired('samp');
+p.addRequired('d');
 
 p.addParamValue('step',       1,      @isscalar);
 p.addParamValue('maxIter',    100,    @isscalar);
@@ -48,7 +48,7 @@ p.addParamValue('tol',        0,      @isscalar);
 p.addParamValue('Lr',         0,      @isscalar);
 p.addParamValue('Lt',         0,      @isscalar);
 
-p.parse(xfm, samp, varargin{:});
+p.parse(xfm, d, varargin{:});
 step        =   p.Results.step;
 Lr          =   p.Results.Lr;
 maxIter     =   p.Results.maxIter;
@@ -67,7 +67,6 @@ est0    =   est;
 y       =   est;
 update  =   inf;
 t1      =   1;
-d       =   xfm'*samp;
 
 %===========================================================
 %   Main Iteration Loop
@@ -80,7 +79,7 @@ while iter <= maxIter && update > tol
 
     %   Singular Value Thresholding
     [U, Sig, V] =   lsvd(est);
-    Sig2        =   diag(max(diag(Sig) - step*L, 0));
+    Sig2        =   diag(max(diag(Sig) - step*Lr, 0));
     est         =   U*Sig2*V';
 
     %   Update the error and change metrics
