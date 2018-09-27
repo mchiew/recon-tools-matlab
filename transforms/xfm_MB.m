@@ -207,33 +207,39 @@ function b = inv(a,b)
 end
 
 
-function [d, g, d_post, g_post] = bias_var(a,L,ord)
+
+function [d, g, e, v] = bias_var(a,L,x,X)
+
+    if nargin < 4
+        X   =   [];
+    else
+        X   =   X - mean(X);
+    end
+    if nargin < 3 || isempty(x)
+        x   =   1:a.Nd(1);
+    end
+        
+
+    if L > 0
 
     m       =   a.mask;
     sens    =   reshape(a.S.coils,[a.Nd(1:3) a.Nc]);    
     d       =   zeros(prod(a.Nd(2:3))*a.Nt, a.Nd(1));
     g       =   zeros(prod(a.Nd(2:3))*a.Nt, a.Nd(1));  
-    d_post  =   zeros(size(d));
-    g_post  =   zeros(size(g));
+    e       =   zeros(prod(a.Nd(2:3)), a.Nd(1));
+    v       =   zeros(prod(a.Nd(2:3)),a.Nt, a.Nd(1));
 
-    switch ord
-        case 0
-            R   =   sparse(prod(a.Nd(2:3))*a.Nt,prod(a.Nd(2:3))*a.Nt);
-        case 1
-            R   =   sptoeplitz(reshape(padarray(L*[2 -1 zeros(1,a.Nt-3) -1],[prod(a.Nd(2:3))-1 0],'post'),[],1));
-        case 2
-            R   =   sptoeplitz(reshape(padarray(L*[6 -4 1 zeros(1,a.Nt-5) 1 -4],[prod(a.Nd(2:3))-1 0],'post'),[],1));
-    end
+    R   =   sptoeplitz(reshape(padarray(L*[2 -1 zeros(1,a.Nt-3) -1],[prod(a.Nd(2:3))-1 0],'post'),[],1));
     
-    for s = 1:a.Ns
-    %fprintf(1,'\n000');
-    for i = 1:a.Nd(1)   
-        %fprintf(1,'\b\b\b%03d',i);        
+    for i = x
+        disp(i);
         iy      =   [];
         iz      =   [];
         dd      =   [];
         
+
         idx     =   find(sens(i,:,:,1));
+
         len     =   length(idx);
         rdx     =   reshape(idx + (0:prod(a.Nd(2:3)):prod(a.Nd(2:3))*a.Nt-1),[],1);
         if len
@@ -271,36 +277,149 @@ function [d, g, d_post, g_post] = bias_var(a,L,ord)
                 BB  =   inv(B(qq,qq));
                 C   =   BB*A(qq,qq);
 
-                d(rdx(qq),i)    =   real(diag(C));
+                if ~isempty(X)
+                    qy =    qL/a.Nt;
+                    for y = 1:qy
+                        S   =   C(y:qy:end,y:qy:end);
+                        X2  =   S*X;
+                        SS  =   S*S';
+                        XX  =   X2'*X2;
+                        e(rdx(qq(y)),i) = (trace(SS)-sum(sum((X2*X2'/XX).*SS',1),2)) / (X2'*SS*X2/XX.^2);
+                        v(rdx(qq(y)),:,i) = X2';
+                    end
+                end
+
+                %d(rdx(qq),i)    =   real(diag(C*C'));
+                d(rdx(qq),i)    =   real(sum(C.*C.',2));
                 
-                C   =   sum(C.*BB.',2);
-                g(rdx(qq),i)    =   real(sqrt(C.*diag(A(qq,qq))));     
-
-                DD  =   inv(eye(length(qq)) + RR(qq,qq));
-
-                d_post(rdx(qq),i)   =   real(diag(DD));
-
-                DD  =   diag(DD*inv(A(qq,qq))*DD);
-                g_post(rdx(qq),i)   =   real(sqrt(DD.*diag(A(qq,qq))));
-                
+                %C   =   sum(C.*BB.',2);
+                g(rdx(qq),i)    =   real(sqrt(sum(C.*BB.',2).*diag(A(qq,qq))));     
 
                 ind =   setdiff(ind,qq);
             end
         end
             
     end
-    %fprintf(1,'\n');    
+    d   =   reshape(d.', [a.Nd, a.Nt]);
+    d   =   d(:,:,:,1);
+    g   =   reshape(g.', [a.Nd, a.Nt]);        
+    g   =   g(:,:,:,1);    
+
+    if isempty(X)
+        e   =   d.*(a.gfactor(1)./g).^2;
+    else
+        e   =   real(reshape(e.', a.Nd)*inv(X'*X)/(a.Nt-trace(X*inv(X'*X)*X')));
+        e   =   e.*(a.gfactor(1)./(g+eps)).^2;
+    end
+
+    v   =   reshape(permute(v,[3,1,2]),[a.Nd, a.Nt]);
+
+    else
+
+    d       =   ones([a.Nd]);
+    g       =   a.gfactor(1);
+    d(g==0) =   0;
+
+    e       =   ones([a.Nd]);
+    end
+
+end
+
+function [d, g, e] = bias_var_posthoc(a,L,x)
+
+    if nargin < 3 
+        x   =    [];
+    end
+
+    if L > 0
+
+    m       =   a.mask;
+    sens    =   reshape(a.S.coils,[a.Nd(1:3) a.Nc]);    
+    d       =   zeros(prod(a.Nd(2:3))*a.Nt, a.Nd(1));
+    g       =   zeros(prod(a.Nd(2:3))*a.Nt, a.Nd(1));  
+
+    R   =   sptoeplitz(reshape(padarray(L*[2 -1 zeros(1,a.Nt-3) -1],[prod(a.Nd(2:3))-1 0],'post'),[],1));
+    
+    for s = 1:a.Ns
+    for i = 1:a.Nd(1)   
+        iy      =   [];
+        iz      =   [];
+        dd      =   [];
+        
+
+        idx     =   find(sens(i,:,:,1));
+
+        len     =   length(idx);
+        rdx     =   reshape(idx + (0:prod(a.Nd(2:3)):prod(a.Nd(2:3))*a.Nt-1),[],1);
+        if len
+            [ii jj] =   ind2sub(a.Nd(2:3),idx);
+            s       =   reshape(sens(i,:,:,:),[],a.Nc);
+            s       =   s(idx,:).';
+            sd  =   zeros(len);
+            for c = 1:a.Nc
+                sd  = sd + s(c,:)'*s(c,:);
+            end
+
+            tmp=    zeros(len);
+            for t = 1:a.Nt
+                [uu vv] =   ind2sub(a.Nd(2:3),find(m(i,:,:,t)));        
+                F       =   exp(-1j*2*pi*((ii(:)-1)'.*(uu(:)-1)/a.Nd(2)+(jj(:)-1)'.*(vv(:)-1)/a.Nd(3)))/sqrt(prod(a.Nd(2:3)));
+                tmp     =   (F'*F).*sd;
+                [y z w] =   find(tmp.*(abs(tmp)>1E-6));
+                iy      =   [iy;y+(t-1)*len];
+                iz      =   [iz;z+(t-1)*len];
+                dd      =   [dd;w];
+            end
+            RR  =   R(rdx,rdx);
+            A   =   sparse(iy,iz,dd,len*a.Nt,len*a.Nt);
+            B   =   A + RR;
+
+            ind =   1:len*a.Nt;
+            while ~isempty(ind)
+                if ~isempty(x)
+                    qq  =   find(rdx==x);
+                else
+                    qq  =   ind(1); 
+                end
+                qL  =   0;
+                while length(qq) > qL
+                    qL  =   length(qq);
+                    qq  =   find(sum(B*B(:,qq),2));
+                end
+
+                DD  =   inv(eye(length(qq)) + RR(qq,qq));
+
+                d(rdx(qq),i)   =   real(diag(DD*DD'));
+
+                DD  =   diag(DD*inv(A(qq,qq))*DD');
+                g(rdx(qq),i)   =   real(sqrt(DD.*diag(A(qq,qq))));
+
+                if any(ismember(rdx(qq),x))
+                    break;
+                end
+                
+                ind =   setdiff(ind,qq);
+            end
+        end
+            
+    end
     end
     d   =   reshape(d.', [a.Nd, a.Nt]);
     d   =   d(:,:,:,1);
     g   =   reshape(g.', [a.Nd, a.Nt]);        
     g   =   g(:,:,:,1);    
 
-    %d_post  =   (1-2*L)*ones(size(d));
-    d_post  =   reshape(d_post.', [a.Nd, a.Nt]);
-    d_post  =   d_post(:,:,:,1);
-    g_post  =   reshape(g_post.', [a.Nd, a.Nt]);
-    g_post  =   g_post(:,:,:,1);
+    e   =   d.*(a.gfactor(1)./g).^2;
+
+    else
+
+    d       =   ones([a.Nd]);
+    g       =   a.gfactor(1);
+    d(g==0) =   0;
+    e       =   ones([a.Nd]);
+
+    end
+
 end
 
 
