@@ -208,8 +208,11 @@ end
 
 
 
-function [d, g, e, v] = bias_var(a,L,x,X)
+function [d, g, e, v, k] = bias_var(a,L,x,X,vox)
 
+    if nargin < 5
+        vox =   [];
+    end
     if nargin < 4
         X   =   [];
     else
@@ -228,6 +231,7 @@ function [d, g, e, v] = bias_var(a,L,x,X)
     g       =   zeros(prod(a.Nd(2:3))*a.Nt, a.Nd(1));  
     e       =   zeros(prod(a.Nd(2:3)), a.Nd(1));
     v       =   zeros(prod(a.Nd(2:3)),a.Nt, a.Nd(1));
+    k       =   zeros(prod(a.Nd(2:3)), a.Nd(1));
 
     R   =   sptoeplitz(reshape(padarray(L*[2 -1 zeros(1,a.Nt-3) -1],[prod(a.Nd(2:3))-1 0],'post'),[],1));
     
@@ -265,7 +269,11 @@ function [d, g, e, v] = bias_var(a,L,x,X)
             A   =   sparse(iy,iz,dd,len*a.Nt,len*a.Nt);
             B   =   A + RR;
 
-            ind =   1:len*a.Nt;
+            if isempty(vox)
+                ind =   1:len;
+            else
+                ind =   vox;
+            end
             while ~isempty(ind)
                 qq  =   ind(1); 
                 qL  =   0;
@@ -284,7 +292,8 @@ function [d, g, e, v] = bias_var(a,L,x,X)
                         X2  =   S*X;
                         SS  =   S*S';
                         XX  =   X2'*X2;
-                        e(rdx(qq(y)),i) = (trace(SS)-sum(sum((X2*X2'/XX).*SS',1),2)) / (X2'*SS*X2/XX.^2);
+                        k(rdx(qq(y)),i) = X2'*SS*X2/XX.^2;
+                        e(rdx(qq(y)),i) = (trace(SS)-sum(sum((X2*X2'/XX).*SS',1),2)) / k(rdx(qq(y)),i);
                         v(rdx(qq(y)),:,i) = X2';
                     end
                 end
@@ -295,7 +304,11 @@ function [d, g, e, v] = bias_var(a,L,x,X)
                 %C   =   sum(C.*BB.',2);
                 g(rdx(qq),i)    =   real(sqrt(sum(C.*BB.',2).*diag(A(qq,qq))));     
 
-                ind =   setdiff(ind,qq);
+                if isempty(vox)
+                    ind =   setdiff(ind,qq);
+                else
+                    break;
+                end
             end
         end
             
@@ -312,7 +325,8 @@ function [d, g, e, v] = bias_var(a,L,x,X)
         e   =   e.*(a.gfactor(1)./(g+eps)).^2;
     end
 
-    v   =   reshape(permute(v,[3,1,2]),[a.Nd, a.Nt]);
+    v   =   real(reshape(permute(v,[3,1,2]),[a.Nd, a.Nt]));
+    k   =   real(reshape(k.',a.Nd));
 
     else
 
