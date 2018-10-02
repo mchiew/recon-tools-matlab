@@ -339,6 +339,19 @@ function [d, g, e, v, k, S] = bias_var(a,L,x,X,vox)
         e   =   e.*(a.gfactor(1)./(g+eps)).^2;
     end
 
+    if ~isempty(vox)
+        d   =   reshape(d,a.Nd(1),a.Nd(2)*a.Nd(3));
+        d   =   d(x,vox);
+        g   =   reshape(g,a.Nd(1),a.Nd(2)*a.Nd(3));
+        g   =   g(x,vox);
+        e   =   reshape(e,a.Nd(1),a.Nd(2)*a.Nd(3));
+        e   =   e(x,vox);
+        k   =   reshape(k,a.Nd(1),a.Nd(2)*a.Nd(3));
+        k   =   k(x,vox);
+        v   =   reshape(v,a.Nd(1),a.Nd(2)*a.Nd(3),a.Nt);
+        v   =   v(x,vox,:);
+    end
+
 
     else
 
