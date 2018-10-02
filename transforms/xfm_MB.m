@@ -297,7 +297,7 @@ function [d, g, e, v, k, S] = bias_var(a,L,x,X,vox)
                     if ~isempty(vox)
                         qy  =   1:qL/a.Nt;
                     else
-                        qy  =   find(qq,vox);
+                        qy  =   find(qq==vox);
                     end
                     for y = qy
                         S   =   C(y:qL/a.Nt:end,y:qL/a.Nt:end);
@@ -341,15 +341,15 @@ function [d, g, e, v, k, S] = bias_var(a,L,x,X,vox)
 
     if ~isempty(vox)
         d   =   reshape(d,a.Nd(1),a.Nd(2)*a.Nd(3));
-        d   =   d(x,vox);
+        d   =   d(x,idx(vox));
         g   =   reshape(g,a.Nd(1),a.Nd(2)*a.Nd(3));
-        g   =   g(x,vox);
+        g   =   g(x,idx(vox));
         e   =   reshape(e,a.Nd(1),a.Nd(2)*a.Nd(3));
-        e   =   e(x,vox);
+        e   =   e(x,idx(vox));
         k   =   reshape(k,a.Nd(1),a.Nd(2)*a.Nd(3));
-        k   =   k(x,vox);
+        k   =   k(x,idx(vox));
         v   =   reshape(v,a.Nd(1),a.Nd(2)*a.Nd(3),a.Nt);
-        v   =   v(x,vox,:);
+        v   =   v(x,idx(vox),:);
     end
 
 
