@@ -208,7 +208,7 @@ end
 
 
 
-function [d, g, e, v, k] = bias_var(a,L,x,X,vox)
+function [d, g, e, v, k, S] = bias_var(a,L,x,X,vox)
 
     if nargin < 5
         vox =   [];
@@ -270,36 +270,47 @@ function [d, g, e, v, k] = bias_var(a,L,x,X,vox)
             B   =   A + RR;
 
             if isempty(vox)
-                ind =   1:len;
+                ind =   1:len*a.Nt;
             else
                 ind =   vox;
             end
             while ~isempty(ind)
-                qq  =   ind(1); 
+                qq  =   ind(1):len:len*a.Nt; 
                 qL  =   0;
                 while length(qq) > qL
                     qL  =   length(qq);
-                    qq  =   find(sum(B*B(:,qq),2));
+                    %qq  =   find(sum(B*B(:,qq),2));
+                    qq  =   find(B*sum(B(:,qq),2));
                 end
 
-                BB  =   inv(B(qq,qq));
-                C   =   BB*A(qq,qq);
+                BB  =   full(inv(B(qq,qq)));
+                C   =   full(BB*A(qq,qq));
+
+                CC  =   C*C';
+                %S   =   CC(find(qq,vox):qL/a.Nt:end,find(qq,vox):qL/a.Nt:end);
+                %return;
+
+                %d(rdx(qq),i)    =   real(diag(C*C'));
+                %d(rdx(qq),i)    =   real(sum(C.*C.',2));
 
                 if ~isempty(X)
-                    qy =    qL/a.Nt;
-                    for y = 1:qy
-                        S   =   C(y:qy:end,y:qy:end);
+                    if ~isempty(vox)
+                        qy  =   1:qL/a.Nt;
+                    else
+                        qy  =   find(qq,vox);
+                    end
+                    for y = qy
+                        S   =   C(y:qL/a.Nt:end,y:qL/a.Nt:end);
                         X2  =   S*X;
-                        SS  =   S*S';
+                        %SS  =   S*S';
+                        SS  =   CC(y:qL/a.Nt:end,y:qL/a.Nt:end);
                         XX  =   X2'*X2;
-                        k(rdx(qq(y)),i) = X2'*SS*X2/XX.^2;
-                        e(rdx(qq(y)),i) = (trace(SS)-sum(sum((X2*X2'/XX).*SS',1),2)) / k(rdx(qq(y)),i);
+                        k(rdx(qq(y)),i) =   X2'*SS*X2/XX.^2;
+                        d(rdx(qq(y)),i) =   trace(SS)-sum(sum((X2*X2'/XX).*SS',1),2);
                         v(rdx(qq(y)),:,i) = X2';
                     end
                 end
 
-                %d(rdx(qq),i)    =   real(diag(C*C'));
-                d(rdx(qq),i)    =   real(sum(C.*C.',2));
                 
                 %C   =   sum(C.*BB.',2);
                 g(rdx(qq),i)    =   real(sqrt(sum(C.*BB.',2).*diag(A(qq,qq))));     
@@ -314,19 +325,20 @@ function [d, g, e, v, k] = bias_var(a,L,x,X,vox)
             
     end
     d   =   reshape(d.', [a.Nd, a.Nt]);
-    d   =   d(:,:,:,1);
+    d   =   real(d(:,:,:,1));
     g   =   reshape(g.', [a.Nd, a.Nt]);        
     g   =   g(:,:,:,1);    
+
+    v   =   real(reshape(permute(v,[3,1,2]),[a.Nd, a.Nt]));
+    k   =   real(reshape(k.',a.Nd));
 
     if isempty(X)
         e   =   d.*(a.gfactor(1)./g).^2;
     else
-        e   =   real(reshape(e.', a.Nd)*inv(X'*X)/(a.Nt-trace(X*inv(X'*X)*X')));
+        e   =   real((d./k)*inv(X'*X)/(a.Nt-trace(X*inv(X'*X)*X')));
         e   =   e.*(a.gfactor(1)./(g+eps)).^2;
     end
 
-    v   =   real(reshape(permute(v,[3,1,2]),[a.Nd, a.Nt]));
-    k   =   real(reshape(k.',a.Nd));
 
     else
 
