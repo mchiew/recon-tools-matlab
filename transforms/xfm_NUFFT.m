@@ -121,18 +121,19 @@ function res = xfm_NUFFT(dims, coils, fieldmap_struct, k, varargin)
                 end
             end
         end
+        res.w   =   res.w*res.st(1).sn(ceil(end/2),ceil(end/2),ceil(end/2))^(-2)/prod(res.st(1).Kd);
     elseif p.wi == 0
         w   =   ones(size(k,1),1);
         for ii = 1:25
             w  =   w./real(res.st(t).p*(res.st(t).p'*w));
         end
+        res.w   =   res.w*res.st(1).sn(ceil(end/2),ceil(end/2),ceil(end/2))^(-2)/prod(res.st(1).Kd);
     elseif isscalar(p.wi)
         res.w   =   repmat(p.wi, 1, res.Nt);
     else
         res.w   =   reshape(p.wi, [], res.Nt);
     end
     res.w       =   sqrt(res.w);
-    res.norm    =   sqrt(res.st(1).sn(ceil(end/2),ceil(end/2),ceil(end/2))^(-2)/prod(res.st(1).Kd));
 
     res.PSF =   res.calcToeplitzEmbedding();
 end

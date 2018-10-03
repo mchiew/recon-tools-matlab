@@ -272,7 +272,7 @@ function [d, g, e, v, k, S] = bias_var(a,L,x,X,vox)
             if isempty(vox)
                 ind =   1:len*a.Nt;
             else
-                ind =   vox;
+                ind =   find(idx==vox);
             end
             while ~isempty(ind)
                 qq  =   ind(1):len:len*a.Nt; 
@@ -294,10 +294,10 @@ function [d, g, e, v, k, S] = bias_var(a,L,x,X,vox)
                 %d(rdx(qq),i)    =   real(sum(C.*C.',2));
 
                 if ~isempty(X)
-                    if ~isempty(vox)
+                    if isempty(vox)
                         qy  =   1:qL/a.Nt;
                     else
-                        qy  =   find(qq==vox);
+                        qy  =   find(qq==ind);
                     end
                     for y = qy
                         S   =   C(y:qL/a.Nt:end,y:qL/a.Nt:end);
@@ -305,9 +305,9 @@ function [d, g, e, v, k, S] = bias_var(a,L,x,X,vox)
                         %SS  =   S*S';
                         SS  =   CC(y:qL/a.Nt:end,y:qL/a.Nt:end);
                         XX  =   X2'*X2;
-                        k(rdx(qq(y)),i) =   X2'*SS*X2/XX.^2;
-                        d(rdx(qq(y)),i) =   trace(SS)-sum(sum((X2*X2'/XX).*SS',1),2);
-                        v(rdx(qq(y)),:,i) = X2';
+                        k(idx(ind),i) =   X2'*SS*X2/XX.^2;
+                        d(idx(ind),i) =   trace(SS)-sum(sum((X2*X2'/XX).*SS',1),2);
+                        v(idx(ind),:,i) = X2';
                     end
                 end
 
@@ -341,15 +341,15 @@ function [d, g, e, v, k, S] = bias_var(a,L,x,X,vox)
 
     if ~isempty(vox)
         d   =   reshape(d,a.Nd(1),a.Nd(2)*a.Nd(3));
-        d   =   d(x,idx(vox));
+        d   =   d(x,vox);
         g   =   reshape(g,a.Nd(1),a.Nd(2)*a.Nd(3));
-        g   =   g(x,idx(vox));
+        g   =   g(x,vox);
         e   =   reshape(e,a.Nd(1),a.Nd(2)*a.Nd(3));
-        e   =   e(x,idx(vox));
+        e   =   e(x,vox);
         k   =   reshape(k,a.Nd(1),a.Nd(2)*a.Nd(3));
-        k   =   k(x,idx(vox));
+        k   =   k(x,vox);
         v   =   reshape(v,a.Nd(1),a.Nd(2)*a.Nd(3),a.Nt);
-        v   =   v(x,idx(vox),:);
+        v   =   v(x,vox,:);
     end
 
 
