@@ -149,14 +149,11 @@ function x = size(b)
     [x(1) x(2) x(3) x(4)]   =   size(b);
 end
 function x = R1(x, L)
-%{
-    x = L(1)*(1*circshift(x,-2,1) - 4*circshift(x,-1,1) + 6*x - 4*circshift(x,1,1) + 1*circshift(x,2,1)) + ...
-        L(2)*(1*circshift(x,-2,2) - 4*circshift(x,-1,2) + 6*x - 4*circshift(x,1,2) + 1*circshift(x,2,2)) + ...
-        L(3)*(1*circshift(x,-2,3) - 4*circshift(x,-1,3) + 6*x - 4*circshift(x,1,3) + 1*circshift(x,2,3)) + ...
-        L(4)*(1*circshift(x,-2,4) - 4*circshift(x,-1,4) + 6*x - 4*circshift(x,1,4) + 1*circshift(x,2,4));
-    %x = L(1)*(1*circshift(x,-2,1)
-    %}
-    x = L(4)*(-1*circshift(x,-1,4) + 2*x - 1*circshift(x,1,4));
+    x = L(1)*(-1*circshift(x,-1,1) + 2*x -1*circshift(x,1,1)) + ...
+        L(2)*(-1*circshift(x,-1,2) + 2*x -1*circshift(x,1,2)) + ...
+        L(3)*(-1*circshift(x,-1,3) + 2*x -1*circshift(x,1,3)) + ...
+        L(4)*(-1*circshift(x,-1,4) + 2*x -1*circshift(x,1,4)); 
+    %x = L(4)*(-1*circshift(x,-1,4) + 2*x - 1*circshift(x,1,4));
 end
 function x = R2(x, L)
 %{

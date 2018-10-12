@@ -305,9 +305,13 @@ function [d, g, e, v, k, S] = bias_var(a,L,x,X,vox)
                         %SS  =   S*S';
                         SS  =   CC(y:qL/a.Nt:end,y:qL/a.Nt:end);
                         XX  =   X2'*X2;
-                        k(idx(ind),i) =   X2'*SS*X2/XX.^2;
-                        d(idx(ind),i) =   trace(SS)-sum(sum((X2*X2'/XX).*SS',1),2);
-                        v(idx(ind),:,i) = X2';
+                        k(idx(qq(y)),i) =   X2'*SS*X2/XX.^2;
+                        d(idx(qq(y)),i) =   trace(SS)-sum(sum((X2*X2'/XX).*SS',1),2);
+                        v(idx(qq(y)),:,i) = X2';
+                    end
+                else
+                    for y = 1:qL/a.Nt;
+                        d(idx(qq(y)),i) =   trace(SS);
                     end
                 end
 
