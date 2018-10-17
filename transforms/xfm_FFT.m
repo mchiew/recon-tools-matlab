@@ -68,6 +68,10 @@ function res = mtimes(a,b)
 
 end
 
+function res = mtimes2(a,b)
+    res = mtimes(a',mtimes(a,b));
+end
+
 function res = mean(a,b)
     res =   zeros([prod(a.Nd)*a.Nt a.Nc]);
     res(a.mask,:)   =   b;

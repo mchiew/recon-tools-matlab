@@ -43,7 +43,7 @@ update  =   inf;
 %===========================================================
 %   Main Iteration Loop
 %===========================================================
-fprintf(1, '%-5s %-16s %-16s %-16s\n', 'Iter','L2','L1','Cost');
+fprintf(1, '%-5s %-16s %-16s %-16s %-16s\n', 'Iter','Update','L2','L1','Cost');
 while iter <= maxIter && update > tol
 
     est     =   denoise(y - (2/L)*(xfm'*(xfm*y - samp)), 2*lambda/L, tv_iters, tv_tol);
@@ -52,16 +52,14 @@ while iter <= maxIter && update > tol
     t2      =   (1+sqrt(1+4*t1^2))/2;
     y       =   est + ((t1-1)/t2)*(est - est0);
 
-    %   Display iteration summary data
-    fprintf(1, '%-5d %-16s %-16s %-16s\n', iter, '-', '-', '-');
-
     %   Update and iteration counter
     update  =   norm(est(:)-est0(:))/norm(est0(:));
     iter    =   iter + 1;
     est0    =   est;
     t1      =   t2;
 
-    show(abs(est(:,1)),[0 1]);
+    %   Display iteration summary data
+    fprintf(1, '%-5d %-16s %-16s %-16s %-16s\n', iter-1, update, '-', '-', '-');
 end
 
 
