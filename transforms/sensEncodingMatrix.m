@@ -13,7 +13,6 @@ classdef sensEncodingMatrix
 properties (SetAccess = private, GetAccess = private)
 
     adjoint =   0;
-    ccoils  =   [];
 end
 
 properties (SetAccess = private, GetAccess = public)
@@ -30,7 +29,6 @@ function res = sensEncodingMatrix(coils)
     res.dims(3) =   size(coils,3);
     res.Nc      =   size(coils,4);
     res.coils   =   reshape(coils,[res.dims 1 res.Nc]);
-    res.ccoils  =   conj(res.coils);
 
 end
 
@@ -47,10 +45,10 @@ function res = mtimes(a,b,c)
         c   =   1:a.Nc;
     end
     if a.adjoint
-        %res =   sum(bsxfun(@times, reshape(b, a.dims(1), a.dims(2), a.dims(3), [], length(c)), a.ccoils(:,:,:,1,c)), 5);
+        %res =   sum(bsxfun(@times, reshape(b, a.dims(1), a.dims(2), a.dims(3), [], length(c)), conj(a.coils(:,:,:,1,c))), 5);
         b   =   reshape(b, a.dims(1), a.dims(2), a.dims(3), [], length(c));
         res =   zeros([a.dims(1:3) size(b,4)]);
-        cc  =   a.ccoils(:,:,:,1,c);
+        cc  =   conj(a.coils(:,:,:,1,c));
         for i = 1:length(c)
             res =   res + bsxfun(@times, b(:,:,:,:,i), cc(:,:,:,1,i));
         end

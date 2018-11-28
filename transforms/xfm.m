@@ -77,7 +77,7 @@ function est = cg(xfm, d, tol, iters)
     fprintf(1, 'Exit after %i iterations, residual: %G\n', iter, relres);
 end
 
-function est = iter(xfm, d, optfn, tol, iters, L, ord, init)
+function est = iter(xfm, d, optfn, tol, iters, L)
 
     %   Performs symmetric iterative recon using built-ins
     %   Input d should be shaped like the output of mtimes
@@ -95,19 +95,13 @@ function est = iter(xfm, d, optfn, tol, iters, L, ord, init)
     if nargin < 6
         L       =   [0,0,0,0];
     end
-    if nargin < 7
-        ord     =   1;
-    end
-    if nargin < 8
-        init    =   zeros(prod(xfm.msize),1);
+
+    if isequal(size(d), xfm.dsize) || (numel(d) == prod(xfm.dsize))
+        d = xfm'*d;
     end
     
-    switch ord
-        case 1
-            [est, ~, relres, iter] =   optfn(@(x,mode) reshape(mtimes2(xfm, reshape(x,[xfm.Nd xfm.Nt])),[],1) + reshape(xfm.R1(reshape(x,[xfm.Nd xfm.Nt]),L),[],1), reshape(xfm'*d,[],1), tol, iters, [], [], reshape(init,[],1));
-        case 2
-            [est, ~, relres, iter] =   optfn(@(x,mode) reshape(mtimes2(xfm, reshape(x,[xfm.Nd xfm.Nt])),[],1) + reshape(xfm.R2(reshape(x,[xfm.Nd xfm.Nt]),L),[],1), reshape(xfm'*d,[],1), tol, iters, [], [], reshape(init,[],1));
-    end
+    [est, ~, relres, iter] =   optfn(@(x,mode) reshape(mtimes2(xfm, reshape(x,[xfm.Nd xfm.Nt])),[],1) + reshape(xfm.R1(reshape(x,[xfm.Nd xfm.Nt]),L),[],1), reshape(d,[],1), tol, iters, [], []);
+
     est =   reshape(est, xfm.msize);
     
     fprintf(1, 'Exit after %i iterations, residual: %G\n', iter, relres);
@@ -153,23 +147,7 @@ function x = R1(x, L)
         L(2)*(-1*circshift(x,-1,2) + 2*x -1*circshift(x,1,2)) + ...
         L(3)*(-1*circshift(x,-1,3) + 2*x -1*circshift(x,1,3)) + ...
         L(4)*(-1*circshift(x,-1,4) + 2*x -1*circshift(x,1,4)); 
-    %x = L(4)*(-1*circshift(x,-1,4) + 2*x - 1*circshift(x,1,4));
 end
-function x = R2(x, L)
-%{
-    x = L(1)*(1*circshift(x,-2,1) - 4*circshift(x,-1,1) + 6*x - 4*circshift(x,1,1) + 1*circshift(x,2,1)) + ...
-        L(2)*(1*circshift(x,-2,2) - 4*circshift(x,-1,2) + 6*x - 4*circshift(x,1,2) + 1*circshift(x,2,2)) + ...
-        L(3)*(1*circshift(x,-2,3) - 4*circshift(x,-1,3) + 6*x - 4*circshift(x,1,3) + 1*circshift(x,2,3)) + ...
-        L(4)*(1*circshift(x,-2,4) - 4*circshift(x,-1,4) + 6*x - 4*circshift(x,1,4) + 1*circshift(x,2,4));
-    %x = L(1)*(1*circshift(x,-2,1)
-    %}
-    x = L(4)*(1*circshift(x,-2,4) - 4*circshift(x,-1,4) + 6*x - 4*circshift(x,1,4) + 1*circshift(x,2,4));
-end
-%{
-function x = d(x,dx,dim)
-    x = x - circshift( 
-end
-%}
 end
 
 end

@@ -49,10 +49,7 @@ properties (SetAccess = protected, GetAccess = public)
     PSF     =   []; % Eigenvalues of circulant embedding 
     tbl     =   [];
     loop    =   [];
-end
-
-properties (SetAccess = public, GetAccess = public)
-    st      =   [];  
+    st      =   [];
 end
 
 methods
@@ -75,6 +72,8 @@ function res = xfm_NUFFT(dims, coils, fieldmap_struct, k, varargin)
     p.addParamValue('mean',     true,                   @islogical);
     p.addParamValue('table',    false,                  @islogical);
     p.addParamValue('loop',     false,                  @islogical);
+    p.addParamValue('PSF',      []);
+    p.addParamValue('st',       []);
 
     p.parse(varargin{:});
     p   =   p.Results;
@@ -89,25 +88,30 @@ function res = xfm_NUFFT(dims, coils, fieldmap_struct, k, varargin)
     res.tbl     =   p.table;
     res.loop    =   p.loop;
 
-    disp('Initialising NUFFT(s)');
-    nd  =   (res.Nd(3) > 1) + 2;
-    for t = res.Nt:-1:1
-        if ~res.tbl
-            st(t)   =   nufft_init(squeeze(k(:, t, 1:nd)),...
-                                   res.Nd(1:nd),...
-                                   p.Jd(1:nd),...
-                                   p.Kd(1:nd),...
-                                   p.shift(1:nd));
-        else
-            st(t)   =   nufft_init(squeeze(k(:, t, 1:nd)),...
-                                   res.Nd(1:nd),...
-                                   p.Jd(1:nd),...
-                                   p.Kd(1:nd),...
-                                   p.shift(1:nd),...
-                                   'table',2^11,'minmax:kb');
+    res.PSF     =   p.PSF;
+    res.st      =   p.st;
+
+    if isempty(res.st)
+        disp('Initialising NUFFT(s)');
+        nd  =   (res.Nd(3) > 1) + 2;
+        for t = res.Nt:-1:1
+            if ~res.tbl
+                st(t)   =   nufft_init(squeeze(k(:, t, 1:nd)),...
+                                       res.Nd(1:nd),...
+                                       p.Jd(1:nd),...
+                                       p.Kd(1:nd),...
+                                       p.shift(1:nd));
+            else
+                st(t)   =   nufft_init(squeeze(k(:, t, 1:nd)),...
+                                       res.Nd(1:nd),...
+                                       p.Jd(1:nd),...
+                                       p.Kd(1:nd),...
+                                       p.shift(1:nd),...
+                                       'table',2^11,'minmax:kb');
+            end
         end
+        res.st  =   st;
     end
-    res.st  =   st;
     if isempty(p.wi)
     disp('Generating Density Compensation Weights');
     %   Use (Pipe 1999) fixed point method
@@ -135,10 +139,12 @@ function res = xfm_NUFFT(dims, coils, fieldmap_struct, k, varargin)
     end
     res.w       =   sqrt(res.w);
 
-    res.PSF =   res.calcToeplitzEmbedding();
+    if isempty(res.PSF)
+        res.PSF =   res.calcToeplitzEmbedding();
+    end
 end
 
-function T = calcToeplitzEmbedding(a,idx)
+function T = calcToeplitzEmbedding(a)
     %   
     %   Should work on arbitrary shaped 3D [Nx, Ny, Nz] problems
     %   
