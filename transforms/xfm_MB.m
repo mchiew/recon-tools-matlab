@@ -208,8 +208,11 @@ end
 
 
 
-function [d, g, e, v, k, S] = bias_var(a,L,x,X,vox)
+function [d, g, e, v, k, S] = bias_var(a,L,x,X,vox,posthoc)
 
+    if nargin < 6
+        posthoc = false;
+    end
     if nargin < 5
         vox =   [];
     end
@@ -283,12 +286,13 @@ function [d, g, e, v, k, S] = bias_var(a,L,x,X,vox)
                     qq  =   find(B*sum(B(:,qq),2));
                 end
 
-                BB  =   full(inv(B(qq,qq)));
-                C   =   full(BB*A(qq,qq));
-
+                if ~posthoc
+                    BB  =   full(inv(B(qq,qq)));
+                    C   =   full(BB*A(qq,qq));
+                else
+                    C   =   full(inv(speye(length(qq)) + RR(qq,qq)));
+                end
                 CC  =   C*C';
-                %S   =   CC(find(qq,vox):qL/a.Nt:end,find(qq,vox):qL/a.Nt:end);
-                %return;
 
                 %d(rdx(qq),i)    =   real(diag(C*C'));
                 %d(rdx(qq),i)    =   real(sum(C.*C.',2));
@@ -311,13 +315,19 @@ function [d, g, e, v, k, S] = bias_var(a,L,x,X,vox)
                     end
                 else
                     for y = 1:qL/a.Nt;
+                        S   =   C(y:qL/a.Nt:end,y:qL/a.Nt:end);
+                        SS  =   CC(y:qL/a.Nt:end,y:qL/a.Nt:end);
                         d(idx(qq(y)),i) =   trace(SS);
                     end
                 end
 
                 
                 %C   =   sum(C.*BB.',2);
-                g(rdx(qq),i)    =   real(sqrt(sum(C.*BB.',2).*diag(A(qq,qq))));     
+                if ~posthoc
+                    g(rdx(qq),i)    =   real(sqrt(sum(C.*BB.',2).*diag(A(qq,qq))));     
+                else
+                    g(rdx(qq),i)    =   real(sqrt(diag(C*inv(A(qq,qq))*C').*diag(A(qq,qq))));
+                end
 
                 if isempty(vox)
                     ind =   setdiff(ind,qq);
@@ -368,102 +378,6 @@ function [d, g, e, v, k, S] = bias_var(a,L,x,X,vox)
 
 end
 
-function [d, g, e] = bias_var_posthoc(a,L,x)
-
-    if nargin < 3 
-        x   =    [];
-    end
-
-    if L > 0
-
-    m       =   a.mask;
-    sens    =   reshape(a.S.coils,[a.Nd(1:3) a.Nc]);    
-    d       =   zeros(prod(a.Nd(2:3))*a.Nt, a.Nd(1));
-    g       =   zeros(prod(a.Nd(2:3))*a.Nt, a.Nd(1));  
-
-    R   =   sptoeplitz(reshape(padarray(L*[2 -1 zeros(1,a.Nt-3) -1],[prod(a.Nd(2:3))-1 0],'post'),[],1));
-    
-    for s = 1:a.Ns
-    for i = 1:a.Nd(1)   
-        iy      =   [];
-        iz      =   [];
-        dd      =   [];
-        
-
-        idx     =   find(sens(i,:,:,1));
-
-        len     =   length(idx);
-        rdx     =   reshape(idx + (0:prod(a.Nd(2:3)):prod(a.Nd(2:3))*a.Nt-1),[],1);
-        if len
-            [ii jj] =   ind2sub(a.Nd(2:3),idx);
-            s       =   reshape(sens(i,:,:,:),[],a.Nc);
-            s       =   s(idx,:).';
-            sd  =   zeros(len);
-            for c = 1:a.Nc
-                sd  = sd + s(c,:)'*s(c,:);
-            end
-
-            tmp=    zeros(len);
-            for t = 1:a.Nt
-                [uu vv] =   ind2sub(a.Nd(2:3),find(m(i,:,:,t)));        
-                F       =   exp(-1j*2*pi*((ii(:)-1)'.*(uu(:)-1)/a.Nd(2)+(jj(:)-1)'.*(vv(:)-1)/a.Nd(3)))/sqrt(prod(a.Nd(2:3)));
-                tmp     =   (F'*F).*sd;
-                [y z w] =   find(tmp.*(abs(tmp)>1E-6));
-                iy      =   [iy;y+(t-1)*len];
-                iz      =   [iz;z+(t-1)*len];
-                dd      =   [dd;w];
-            end
-            RR  =   R(rdx,rdx);
-            A   =   sparse(iy,iz,dd,len*a.Nt,len*a.Nt);
-            B   =   A + RR;
-
-            ind =   1:len*a.Nt;
-            while ~isempty(ind)
-                if ~isempty(x)
-                    qq  =   find(rdx==x);
-                else
-                    qq  =   ind(1); 
-                end
-                qL  =   0;
-                while length(qq) > qL
-                    qL  =   length(qq);
-                    qq  =   find(sum(B*B(:,qq),2));
-                end
-
-                DD  =   inv(eye(length(qq)) + RR(qq,qq));
-
-                d(rdx(qq),i)   =   real(diag(DD*DD'));
-
-                DD  =   diag(DD*inv(A(qq,qq))*DD');
-                g(rdx(qq),i)   =   real(sqrt(DD.*diag(A(qq,qq))));
-
-                if any(ismember(rdx(qq),x))
-                    break;
-                end
-                
-                ind =   setdiff(ind,qq);
-            end
-        end
-            
-    end
-    end
-    d   =   reshape(d.', [a.Nd, a.Nt]);
-    d   =   d(:,:,:,1);
-    g   =   reshape(g.', [a.Nd, a.Nt]);        
-    g   =   g(:,:,:,1);    
-
-    e   =   d.*(a.gfactor(1)./g).^2;
-
-    else
-
-    d       =   ones([a.Nd]);
-    g       =   a.gfactor(1);
-    d(g==0) =   0;
-    e       =   ones([a.Nd]);
-
-    end
-
-end
 
 
 end
