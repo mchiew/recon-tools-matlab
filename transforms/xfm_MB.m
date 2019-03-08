@@ -347,7 +347,7 @@ function [d, g, e, v, k, S] = bias_var(a,L,x,X,vox,posthoc)
     k   =   real(reshape(k.',a.Nd));
 
     if isempty(X)
-        e   =   d.*(a.gfactor(1)./g).^2;
+        e   =   (d/a.Nt).*(a.gfactor(1)./g).^2;
     else
         e   =   real((d./k)*inv(X'*X)/(a.Nt-trace(X*inv(X'*X)*X')));
         e   =   e.*(a.gfactor(1)./(g+eps)).^2;
@@ -369,7 +369,7 @@ function [d, g, e, v, k, S] = bias_var(a,L,x,X,vox,posthoc)
 
     else
 
-    d       =   ones([a.Nd]);
+    d       =   ones([a.Nd])*a.Nt;
     g       =   a.gfactor(1);
     d(g==0) =   0;
 
