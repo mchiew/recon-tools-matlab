@@ -14,6 +14,11 @@ classdef xfm_FFT < xfm
 %       mask    -   [Nx, Ny, Nz, Nt] logical sampling mask
 %       coils   -   [Nx, Ny, Nz, Nc] array of coil sensitivities 
 %                   Defaults to single channel i.e. ones(Nx,Ny,Nz)
+%       fieldmap_struct - struct(
+%                   'field',    [field map in Hz],
+%                   't',        [time (in seconds) of every k-sample],
+%                   'L',        number of interpolation bins (recommend 20),
+%                   'idx',      [vector specifying which "t" to use at each time-point])
 %
 %   Usage:
 %           Forward transforms can be applied using the "*" or ".*" operators
