@@ -59,24 +59,6 @@ function step = max_step(xfm,iters)
     step    =   1./norm(y(:));
 end
 
-function est = cg(xfm, d, tol, iters)
-
-    %   Performs iterative SENSE recon using built-in lsqr
-    %   Input d should be shaped like the output of mtimes
-
-    if nargin < 3
-        tol     =   [];
-    end
-    if nargin < 4
-        iters   =   100;
-    end
-
-    [est, flag, relres, iter] =   lsqr(@(x,mode) afun(x,mode,xfm), reshape(d,[],1), tol, iters);
-    est =   reshape(est, xfm.msize);
-
-    fprintf(1, 'Exit after %i iterations, residual: %G\n', iter, relres);
-end
-
 function est = iter(xfm, d, optfn, tol, iters, L)
 
     %   Performs symmetric iterative recon using built-ins
@@ -142,20 +124,12 @@ end
 function x = size(b)
     [x(1) x(2) x(3) x(4)]   =   size(b);
 end
-function x = R1(x, L)
+function x = R1(x, L)    
     x = L(1)*(-1*circshift(x,-1,1) + 2*x -1*circshift(x,1,1)) + ...
         L(2)*(-1*circshift(x,-1,2) + 2*x -1*circshift(x,1,2)) + ...
         L(3)*(-1*circshift(x,-1,3) + 2*x -1*circshift(x,1,3)) + ...
-        L(4)*(-1*circshift(x,-1,4) + 2*x -1*circshift(x,1,4)); 
+        L(4)*(-1*circshift(x,-1,4) + 2*x -1*circshift(x,1,4));         
 end
 end
 
-end
-
-function y = afun(x, mode, xfm)
-    if strcmp(mode, 'transp')
-        y   =   reshape(xfm'*reshape(x,xfm.dsize),[],1);
-    else
-        y   =   reshape(xfm*reshape(x,xfm.msize),[],1);
-    end
 end
