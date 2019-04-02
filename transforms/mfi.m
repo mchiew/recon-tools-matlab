@@ -11,6 +11,7 @@ classdef mfi
 %           dw  -   spatial off-resonance (in Hz) map
 %           t   -   time (in s) of each k-space sample
 %           L   -   number of frequency interpolation bins
+%           idx -   which t-index to use for each time-point
 
 properties (SetAccess = private, GetAccess = public)
 
@@ -47,40 +48,49 @@ function res = mfi(dw, t, L, idx)
     res.kdim(1) =   size(t,1);
     res.kdim(2) =   size(t,2);
     res.kdim(3) =   size(t,3);
-
+    tidx    =   size(t,4);
+    t       =   reshape(t,[],tidx);
+    
     res.idx =   idx;
     res.Nt  =   length(idx);
 
-    %   0.1 Hz and 0.1 ms interpolation resolution
-    tmpW    =   linspace(min(dw(:)), max(dw(:)), round(1E1*(max(dw(:))-min(dw(:)))));
-    tmpT    =   linspace(min(t(:)), max(t(:)), round(1E4*(max(t(:))-min(t(:)))));
+    res.c   =   zeros([res.rdim tidx 1 L]);
+    res.L   =   zeros([res.rdim tidx 1 L]);
+    res.d   =   zeros([res.kdim tidx 1 L]);
+    res.M   =   zeros([res.kdim tidx 1 L]);
+    for tt = 1:tidx
+        
+        %   0.1 Hz and 0.1 ms interpolation resolution
+        tmpW    =   linspace(min(dw(:)), max(dw(:)), round(1E1*(max(dw(:))-min(dw(:)))));
+        tmpT    =   linspace(min(t(:,tt)), max(t(:,tt)), round(1E4*(max(t(:,tt))-min(t(:,tt)))));
 
-    %   MFI Interpolation
-    %   We use the regularised pseudo-inverse to perform the LS coefficient fits
-    %   Because combination weights are a smooth function of off-resonance,
-    %   we only fit a reduced set of coefficients, and use spline interpolation
-    %   to fill in the rest
+        %   MFI Interpolation
+        %   We use the regularised pseudo-inverse to perform the LS coefficient fits
+        %   Because combination weights are a smooth function of off-resonance,
+        %   we only fit a reduced set of coefficients, and use spline interpolation
+        %   to fill in the rest
 
-    LL      =   linspace(min(dw(:)), max(dw(:)), L);
-    D       =   pinv(exp(-1j*2*pi*bsxfun(@times, LL, tmpT')));
-    c       =   D*exp(-1j*2*pi*bsxfun(@times, tmpW, tmpT'));
-    c       =   interp1(tmpW, c.', dw(:), 'spline');
-    res.c   =   reshape(c, [res.rdim 1 1 L]);
+        LL      =   linspace(min(dw(:)), max(dw(:)), L);
+        D       =   pinv(exp(-1j*2*pi*bsxfun(@times, LL, tmpT')));
+        c       =   D*exp(-1j*2*pi*bsxfun(@times, tmpW, tmpT'));
+        c       =   interp1(tmpW, c.', dw(:), 'spline');
+       
+        res.c(:,:,:,tt,:,:)   =   reshape(c, [res.rdim 1 1 L]);
+        res.L(:,:,:,tt,:,:)   =   exp(-1j*2*pi*bsxfun(@times, reshape(LL,1,1,1,1,1,[]), res.t(:,:,:,tt)));
 
-    res.L   =   exp(-1j*2*pi*bsxfun(@times, reshape(LL,1,1,1,1,1,[]), res.t));
-    
-    %   Reverse MFI Interpolation (i.e. time-interpolation for fwd transform)
-    %   We use the regularised pseudo-inverse to perform the LS coefficient fits
-    %   Because combination weights are a smooth function of time,
-    %   we only fit a reduced set of coefficients, and use spline interpolation
-    %   to fill in the rest    
-    MM      =   linspace(min(t(:)), max(t(:)), L);
-    E       =   pinv(exp(1j*2*pi*dw(:).*MM));
-    res.d   =   E*exp(1j*2*pi*dw(:).*tmpT);
-    res.d   =   interp1(tmpT, res.d.', t(:), 'spline');
-    res.d   =   reshape(res.d, [res.kdim size(t,4) 1 L]);
-
-    res.M   =   exp(1j*2*pi*bsxfun(@times, res.dw, reshape(MM,1,1,1,1,1,[])));
+        %   Reverse MFI Interpolation (i.e. time-interpolation for fwd transform)
+        %   We use the regularised pseudo-inverse to perform the LS coefficient fits
+        %   Because combination weights are a smooth function of time,
+        %   we only fit a reduced set of coefficients, and use spline interpolation
+        %   to fill in the rest    
+        MM      =   linspace(min(t(:,tt)), max(t(:,tt)), L);
+        E       =   pinv(exp(1j*2*pi*dw(:).*MM));
+        d       =   E*exp(1j*2*pi*dw(:).*tmpT);
+        d       =   interp1(tmpT, d.', t(:,tt), 'spline');
+                
+        res.d(:,:,:,tt,:,:)   =   reshape(d, [res.kdim 1 1 L]);
+        res.M(:,:,:,tt,:,:)   =   exp(1j*2*pi*bsxfun(@times, res.dw, reshape(MM,1,1,1,1,1,[])));
+    end
     end
 end
 
@@ -132,7 +142,7 @@ function res = mtimes(a,b, fftfn, dims, tt)
         end
         %}
 
-        res =   sum(fftfn(b.*a.L(:,:,:,a.idx(tt),:,:), dims).*a.c, 6);
+        res =   sum(fftfn(b.*a.L(:,:,:,a.idx(tt),:,:), dims).*a.c(:,:,:,a.idx(tt),:,:), 6);
 
     %   Fwd
     else
@@ -163,7 +173,7 @@ function res = mtimes(a,b, fftfn, dims, tt)
         %res =   sum(tmp.*a.d(:,:,:,a.idx(tt),:,:), 6);
         %}
 
-        res =   sum(fftfn(b.*a.M, dims).*a.d(:,:,:,a.idx(tt),:,:), 6);
+        res =   sum(fftfn(b.*a.M(:,:,:,a.idx(tt),:,:), dims).*a.d(:,:,:,a.idx(tt),:,:), 6);
     end
     end
 
