@@ -59,5 +59,5 @@ end
 
 function x = R1(x)
     %x =  -1*circshift(x,-1,2) + 2*x - 1*circshift(x,1,2);
-    x = [2*x(:,1) - x(:,2), -1*circshift(x(:,2:end-1),-1,2) + 2*x(:,2:end-1) - 1*circshift(x(:,2:end-1),1,2),2*x(:,end)-x(:,end-1)];
+    x = [x(:,1)-x(:,2), -1*x(:,1:end-2) + 2*x(:,2:end-1) - x(:,3:end), -1*x(:,end-1) + x(:,end)];
 end
