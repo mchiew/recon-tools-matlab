@@ -89,6 +89,29 @@ function est = iter(xfm, d, optfn, tol, iters, L)
     fprintf(1, 'Exit after %i iterations, residual: %G\n', iter, relres);
 end
 
+function x = cg(xfm, y, tol, iters, L)
+    if nargin < 5
+        L       =   [0,0,0,0];
+    end
+    r = y;
+    d = 0;
+    x = zeros(xfm.msize);
+    for i = 1:iters
+        g = xfm'*r - reshape(xfm.R1(reshape(x,[xfm.Nd xfm.Nt]),L),[],1);
+        if i == 1
+            gamma = 0;
+        else
+            gamma = (g(:)'*g(:))/(g0(:)'*g0(:));
+        end
+        d = g + gamma*d;
+        q = xfm*d;
+        a = (d(:)'*g(:))/(q(:)'*q(:)) + d(:)'*reshape(xfm.R1(reshape(d,[xfm.Nd xfm.Nt]),L),[],1);
+        x = x + a*d;
+        r = r - a*q;
+        g0 = g;
+    end
+end
+
 function res = times(a,b)
     if a.adjoint
         res =   reshape(mtimes(a,b), [a.Nd(1:2) a.Nd(3), a.Nt]);
