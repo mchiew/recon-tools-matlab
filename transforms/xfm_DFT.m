@@ -66,7 +66,7 @@ function res = xfm_DFT(dims, coils, fieldmap_struct, k, varargin)
 
     res.E       =   p.DFT;
     if isempty(res.E)
-        [x,y,z] =   meshgrid((0:res.Nd(1)) - p.shift(1), (0:res.Nd(2)) - p.shift(2), (0:res.Nd(3)) - p.shift(3));
+        [x,y,z] =   meshgrid((0:res.Nd(1)-1) - p.shift(1), (0:res.Nd(2)-1) - p.shift(2), (0:res.Nd(3)-1) - p.shift(3));
         res.E   =   zeros(size(k,1),numel(x),res.Nt);
         for t = 1:res.Nt
             if res.Nd(3) > 1    % 3D
@@ -378,14 +378,14 @@ function T = calcToeplitzEmbedding(a)
     tmp(1,1,1)  =   1;
     for t = 1:Nt
         EE(:,:,t)   =   E(:,:,t)'*E(:,:,t);
-        x1(:,:,t)   =   reshape(EE(:,:,t)*tmp, Nd(1), []);
+        x1(:,:,t)   =   reshape(EE(:,:,t)*tmp(:), Nd(1), []);
     end
 
     %   Second column
     tmp =   zeros(Nd,'single');
     tmp(end,1,1)    =   1;
     for t = 1:Nt
-        x2(:,:,t)   =   reshape(EE(:,:,t)*tmp, Nd(1), []);
+        x2(:,:,t)   =   reshape(EE(:,:,t)*tmp(:), Nd(1), []);
         x2(end,:,t) =   0;
     end
 
@@ -393,14 +393,14 @@ function T = calcToeplitzEmbedding(a)
     tmp =   zeros(Nd,'single');
     tmp(1,end,1)    =   1;
     for t = 1:Nt
-        x3(:,:,t)   =   reshape(EE(:,:,t)*tmp, Nd(1), []);
+        x3(:,:,t)   =   reshape(EE(:,:,t)*tmp(:), Nd(1), []);
     end
 
     %   Fourth column
     tmp =   zeros(Nd,'single');
     tmp(end,end,1)  =   1;
     for t = 1:Nt
-        x4(:,:,t)   =   reshape(EE(:,:,t)*tmp, Nd(1), []);
+        x4(:,:,t)   =   reshape(EE(:,:,t)*tmp(:), Nd(1), []);
         x4(end,:,t) =   0;
     end
 
@@ -436,7 +436,7 @@ function T = calcToeplitzEmbedding(a)
         T(4*prod(Nd)+4*(i-1)*prod(Nd(1:2))+1:4*prod(Nd)+4*i*prod(Nd(1:2)),:)    =   conj(reshape(M3(:,:,i,:),[],Nt));
     end
 
-    T   =   prod(sqrt(2*Nd))*a.fftfn_ns(reshape(T,[2*Nd Nt]), 1:3)*a.norm^2;
+    T   =   a.fftfn_ns(reshape(T,[2*Nd Nt]), 1:3);
 
 end
 
@@ -498,14 +498,13 @@ function res = mtimes(a,b,idx)
         for t = 1:nt
             res(:,:,:,t,:)  =   reshape(E(:,:,t)'*squeeze(b(:,t,:)),[nd,1,nc]);
         end
-        res =   reshape(a.norm*(a.S'*res), [], nt);
+        res =   reshape(a.S'*res, [], nt);
     else
     %   Forward DFT and coil transform
         res =   zeros([ds(1) nt ds(3)]);
-        tmp =   a.norm*(a.S*b);
+        tmp =   a.S*b;
         for t = 1:nt
-                res(:,t,:)  =   reshape(E(:,:,t)*reshape(tmp(:,:,:,t,:),[],ds(3)),[],1,ds(3));
-            end
+            res(:,t,:)  =   reshape(E(:,:,t)*reshape(tmp(:,:,:,t,:),[],ds(3)),[],1,ds(3));
         end
     end
 
