@@ -111,6 +111,8 @@ function TT = calcToeplitzEmbedding(a)
     Nd  =   a.Nd;
     Nt  =   a.Nt;
 
+    Nd(3)   =   1;
+
     for p = 1:a.PAT
         st  =   a.st{p};
 

@@ -54,10 +54,10 @@ function res = mfi(dw, t, L, idx)
     res.idx =   idx;
     res.Nt  =   length(idx);
 
-    res.c   =   zeros([res.rdim tidx 1 L]);
-    res.L   =   zeros([res.rdim tidx 1 L]);
-    res.d   =   zeros([res.kdim tidx 1 L]);
-    res.M   =   zeros([res.kdim tidx 1 L]);
+    res.c   =   zeros([res.rdim tidx 1 L],'single');
+    res.L   =   zeros([res.rdim tidx 1 L],'single');
+    res.d   =   zeros([res.kdim tidx 1 L],'single');
+    res.M   =   zeros([res.kdim tidx 1 L],'single');
     for tt = 1:tidx
         
         %   0.1 Hz and 0.1 ms interpolation resolution
