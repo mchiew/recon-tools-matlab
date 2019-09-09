@@ -83,9 +83,11 @@ function est = iter(xfm, d, optfn, tol, iters, L)
 
     if isequal(size(d), xfm.dsize) || (numel(d) == prod(xfm.dsize))
         d = xfm'*d;
+    elseif ~isequal(size(d), xfm.msize) 
+        error('Wrong input dimensions');
     end
     
-    [est, ~, relres, iter] =   optfn(@(x,mode) reshape(mtimes2(xfm, reshape(x,[xfm.Nd xfm.Nt])),[],1) + reshape(xfm.R1(reshape(x,[xfm.Nd xfm.Nt]),L),[],1), reshape(d,[],1), tol, iters, [], []);
+    [est, flag, relres, iter] =   optfn(@(x,mode) reshape(mtimes2(xfm, reshape(x,[xfm.Nd xfm.Nt])),[],1) + reshape(xfm.R1(reshape(x,[xfm.Nd xfm.Nt]),L),[],1), reshape(d,[],1), tol, iters, [], []);
 
     est =   reshape(est, xfm.msize);
     
@@ -151,10 +153,14 @@ function x = size(b)
     [x(1) x(2) x(3) x(4)]   =   size(b);
 end
 function x = R1(x, L)    
+    % cyclic spatial boundary conditions
+    % non-cyclic boundary conditionsfor time dimension
     x = L(1)*(-1*circshift(x,-1,1) + 2*x -1*circshift(x,1,1)) + ...
         L(2)*(-1*circshift(x,-1,2) + 2*x -1*circshift(x,1,2)) + ...
         L(3)*(-1*circshift(x,-1,3) + 2*x -1*circshift(x,1,3)) + ...
-        L(4)*(-1*circshift(x,-1,4) + 2*x -1*circshift(x,1,4));         
+        L(4)*cat(4, x(:,:,:,1) - x(:,:,:,2),...
+                    -1*x(:,:,:,1:end-2) + 2*x(:,:,:,2:end-1) -1*x(:,:,:,3:end),...
+                    -1*x(:,:,:,end-1) + x(:,:,:,end));
 end
 end
 
