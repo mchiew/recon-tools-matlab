@@ -52,7 +52,10 @@ function step = max_step(xfm,iters)
     N   =   0;
     ii  =   0;
     while abs(norm(y(:)) - N)/N > 1E-4 && ii < iters
-        N   =   norm(y(:)); disp(1./N);
+        N   =   norm(y(:)); 
+        if nargout == 0
+            disp(1./N);
+        end
         y   =   xfm.mtimes2(y/N);
         ii  =   ii+1;
     end

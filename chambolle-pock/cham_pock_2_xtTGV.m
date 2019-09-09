@@ -44,8 +44,8 @@ r2  =   zeros([xfm.Nd(1:3) xfm.Nt],'single');
 d   =   reshape(d, [xfm.Nd(1:3) xfm.Nt]);
 
 h   =   0;                  % this is theta in Chambolle & Pock
-t   =   step/sqrt(8);               % this is tau in Chambolle & Pock
-s   =   step/sqrt(8);               % this is sigma in Chambolle & Pock
+t   =   step/sqrt(12);      % this is tau in Chambolle & Pock
+s   =   step/sqrt(12);      % this is sigma in Chambolle & Pock
 g   =   gamma;              % this is gamma in Chambolle & Pock
 a1  =   1;
 a0  =   2;
@@ -59,7 +59,7 @@ fprintf(1, '%-5s %-16s\n', 'iter','rel. update');
 while iter < niter && update > tol
     p   =   proj(p + s*(grad(u+h*(u-uu),lambda_x,lambda_t) - (v+h*(v-vv))), a1);
     q   =   proj(q + s*symgrad(v+h*(v-vv),lambda_x,lambda_t), a0);
-    r2  =   prox(r2 - s*d + s*reshape(mtimes2(xfm, u+h*(u-uu)),[xfm.Nd(1:3) xfm.Nt]), s, lambda_t); 
+    r2  =   prox(r2 - s*d + s*reshape(mtimes2(xfm, u+h*(u-uu)),[xfm.Nd(1:3) xfm.Nt]), s, lambda); 
 
     uu  =   u;
     u   =   u + t*(div(p,lambda_x,lambda_t)-r2);
@@ -98,38 +98,24 @@ function x = pgrad(x, dim, Lx, Lt)
 %    0 -1  1  0
 %    0  0 -1  1
 %    0  0  0  0
+
+    Lx = Lx/max(Lx,Lt);
+    Lt = Lt/max(Lx,Lt);
+
     if size(x,dim) > 1
         switch dim
         case 1
-            x = cat(1,diff(x,1,1),zeros(1,size(x,2),size(x,3),size(x,4)))*(Lx/Lt);
+            x = cat(1,diff(x,1,1),zeros(1,size(x,2),size(x,3),size(x,4)))*Lx;
         case 2
-            x = cat(2,diff(x,1,2),zeros(size(x,1),1,size(x,3),size(x,4)))*(Lx/Lt);
+            x = cat(2,diff(x,1,2),zeros(size(x,1),1,size(x,3),size(x,4)))*Lx;
         case 3
-            x = cat(3,diff(x,1,3),zeros(size(x,1),size(x,2),1,size(x,4)))*(Lx/Lt);
+            x = cat(3,diff(x,1,3),zeros(size(x,1),size(x,2),1,size(x,4)))*Lx;
         case 4
-            x = cat(4,diff(x,1,4),zeros(size(x,1),size(x,2),size(x,3),1));
+            x = cat(4,diff(x,1,4),zeros(size(x,1),size(x,2),size(x,3),1))*Lt;
         end
     else
         x   =   zeros(size(x));
     end
-
-%{
-%   Cyclic boundary conditions instead
-%    1  0  0 -1
-%   -1  1  0  0
-%    0 -1  1  0
-%    0  0 -1  1
-    switch dim
-    case 1
-        x = diff(cat(1,x(end,:,:,:,:),x),1,1)*(Lx/Lt);
-    case 2
-        x = diff(cat(2,x(:,end,:,:,:),x),1,2)*(Lx/Lt);
-    case 3
-        x = diff(cat(3,x(:,:,end,:,:),x),1,3)*(Lx/Lt);
-    case 4
-        x = diff(cat(4,x(:,:,:,end,:),x),1,4);
-    end
-%}
 end
 
 function x = ngrad(x,dim, Lx, Lt)
@@ -140,39 +126,24 @@ function x = ngrad(x,dim, Lx, Lt)
 %   -1  1  0  0
 %    0 -1  1  0
 %    0  0 -1  0
+
+    Lx = Lx/max(Lx,Lt);
+    Lt = Lt/max(Lx,Lt);
+
     if size(x,dim) > 1
         switch dim
         case 1
-            x = cat(1,x(1,:,:,:),diff(x(1:end-1,:,:,:),1,1),-x(end-1,:,:,:))*(Lx/Lt);
+            x = cat(1,x(1,:,:,:),diff(x(1:end-1,:,:,:),1,1),-x(end-1,:,:,:))*Lx;
         case 2
-            x = cat(2,x(:,1,:,:),diff(x(:,1:end-1,:,:),1,2),-x(:,end-1,:,:))*(Lx/Lt);
+            x = cat(2,x(:,1,:,:),diff(x(:,1:end-1,:,:),1,2),-x(:,end-1,:,:))*Lx;
         case 3
-            x = cat(3,x(:,:,1,:),diff(x(:,:,1:end-1,:),1,3),-x(:,:,end-1,:))*(Lx/Lt);
+            x = cat(3,x(:,:,1,:),diff(x(:,:,1:end-1,:),1,3),-x(:,:,end-1,:))*Lx;
         case 4
-            x = cat(4,x(:,:,:,1),diff(x(:,:,:,1:end-1),1,4),-x(:,:,:,end-1));
+            x = cat(4,x(:,:,:,1),diff(x(:,:,:,1:end-1),1,4),-x(:,:,:,end-1))*Lt;
         end
     else
         x   =   zeros(size(x));
     end
-
-    
-%{
-%   Cyclic adjoint
-%   -1  1  0  0
-%    0 -1  1  0
-%    0  0 -1  1
-%    1  0  0 -1
-    switch dim
-    case 1
-        x = cat(1,diff(x,1,1),x(1,:,:,:,:)-x(end,:,:,:,:))*(Lx/Lt);
-    case 2
-        x = cat(2,diff(x,1,2),x(:,1,:,:,:)-x(:,end,:,:,:))*(Lx/Lt);
-    case 3
-        x = cat(3,diff(x,1,3),x(:,:,1,:,:)-x(:,:,end,:,:))*(Lx/Lt);
-    case 4
-        x = cat(4,diff(x,1,4),x(:,:,:,1,:)-x(:,:,:,end,:));
-    end
-%}
 end
 
 function y = grad(x,Lx,Lt)
