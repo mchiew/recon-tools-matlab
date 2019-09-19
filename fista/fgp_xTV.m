@@ -1,6 +1,6 @@
-function est = fgp_xTV(xfm, samp, lambda, step, maxIter, tol)
+function est = fgp_xTV(xfm, samp, lambda, maxIter, tol)
 %
-%   est = fgp_xTV(xfm, samp, lambda, [step], [maxIter], [tol])
+%   est = fgp_xTV(xfm, T, samp, lambda, [maxIter], [tol])
 %
 %   fgp_xTV 
 %   Spatial Total Variation Constrained Fast Gradient Projection
@@ -26,44 +26,42 @@ end
 if nargin < 5
     maxIter = 100;
 end
-if nargin < 4
-    step = 1;
-end
 
 tv_iters    =   100;
-tv_tol      =   1E-4;
+tv_tol      =   1E-6;
 
 est     =   zeros([xfm.Nd(1:2) xfm.Nt]);
 est0    =   est;
 y       =   zeros(xfm.msize);
 
-L       =   1/step;
+L       =   abs(T(1));
+step    =   1/L;
 iter    =   1;
 t1      =   1;
 update  =   inf;
 
+d       =   xfm'*samp;
+
 %===========================================================
 %   Main Iteration Loop
 %===========================================================
-fprintf(1, '%-5s %-16s %-16s %-16s\n', 'Iter','L2','L1','Cost');
+fprintf(1, '%-5s %-16s %-16s %-16s\n', 'Iter','L2','TV','Cost');
 while iter <= maxIter && update > tol
 
-    est     =   denoise(reshape(y - (2/L)*(xfm'*(xfm*y - samp)), [xfm.Nd(1:2), xfm.Nt]), 2*lambda/L, tv_iters, tv_tol);
+    est     =   denoise(reshape(y - (2/L)*(mtimes2(xfm,y) - d), [xfm.Nd(1:2), xfm.Nt]), 2*lambda/L, tv_iters, tv_tol);
 
     %   Accleration
     t2      =   (1+sqrt(1+4*t1^2))/2;
     y       =   reshape(est + ((t1-1)/t2)*(est - est0), xfm.msize);
 
     %   Display iteration summary data
-    fprintf(1, '%-5d %-16s %-16s %-16s\n', iter, '-', '-', '-');
+    fprintf(1, '%-5d %-16s %-16s %-16s\n', iter, '-', isoTV(est), '-');
 
     %   Update and iteration counter
     update  =   norm(est(:)-est0(:))/norm(est0(:));
     iter    =   iter + 1;
     est0    =   est;
     t1      =   t2;
-
-    show(abs(est(:,:,1)),[0 1]);
 end
 
 
@@ -103,7 +101,7 @@ function y = Dfwd(x)
 end
 function y = Dadj(x)
 %   1->2
-    y           =   zeros([size(x) 2]);
+    y           =   zeros([size(x,1) size(x,2) size(x,3) 2]);
     y(:,:,:,1)  =   diff(cat(1,x(end,:,:),x),1,1);
     y(:,:,:,2)  =   diff(cat(2,x(:,end,:),x),1,2);
 end
@@ -115,4 +113,9 @@ end
 %   Anisotropic TV-L1 Projection
 function x = proj_TVL1(x)
     x = x./max(1,abs(x));
+end
+
+%   Iso TV norm
+function y = isoTV(x)
+    y = sum(sqrt(sum(reshape(abs(Dadj(x)).^2,[],2),2)));
 end
