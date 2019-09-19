@@ -25,20 +25,41 @@ update = inf;
 
 while iter < max_iter && update > tol
     % sparse coding
-    for i = 1:size(y,2)
-        x(:,i) = sparse(omp(D, y(:,i), s));        
-    end
+    %for i = 1:size(y,2)
+    %    x(:,i) = sparse(omp(D, y(:,i), s));        
+    %end
+    x = sparse(omp(D, y, s));
     
     % codebook update
     for i = 1:K
         w = find(x(i,:));
-        E = y - D(:,[1:i-1 i+1:K])*x([1:i-1 i+1:K],:);
-        E = E(:,w);
-        
-        [u,s,v] = svd(E,0);
-        
-        D(:,i) = u(:,1);
-        x(i,w) = s(1)*v(:,1).';
+        if ~isempty(w)
+            E = y - D(:,[1:i-1 i+1:K])*x([1:i-1 i+1:K],:);
+            E = E(:,w);
+
+            [u,sig,v] = svd(E,0);
+
+            % prune atom if too similar to existing atom
+            m = max(abs(u(:,1)'*D));
+            if m < 0.9
+                D(:,i) = u(:,1);
+                x(i,w) = sig(1)*v(:,1).';
+            else
+                tmp     = sum(abs(y - D*x).^2,1);
+                [~, ii] = max(tmp);
+                D(:,i)  = y(:,ii)/norm(y(:,ii));
+                x(:,ii)  = 0;
+                x(i,ii) = norm(y(:,ii));
+            end            
+
+        else
+            % prune atom if unused
+            tmp     = sum(abs(y - D*x).^2,1);
+            [~, ii] = max(tmp);
+            D(:,i)  = y(:,ii)/norm(y(:,ii));
+            x(:,ii)  = 0;
+            x(i,ii) = norm(y(:,ii));
+        end
     end
     
     % iteration update    

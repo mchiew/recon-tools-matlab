@@ -6,19 +6,20 @@ function c = omp(D,x,k)
 % c = mp(D,x)
 %
 % inputs:   D   - dictionary (normalised columns)
-%           x   - input signal
+%           x   - input signal(s)
 %           k   - number of coefficients
 % outputs:  c   - dictionary coefficients
 
-R = x;
-c = zeros(size(D,2),1);
+c = zeros(size(D,2),size(x,2));
 
-for n = 1:k
-    a = D'*R;
-    [~,ii] = max(abs(a));
-    c(ii) = a(ii);
-    DD = D(:,c~=0);
-    P = (DD/(DD'*DD))*DD';
-    R = R - P*R;
+for i = 1:size(x,2)
+    R = x(:,i);
+    for n = 1:k
+        a = D'*R;
+        [~,ii] = max(abs(a));
+        c(ii,i) = a(ii);
+        DD = D(:,c(:,i)~=0);
+        P = (DD/(DD'*DD))*DD';
+        R = R - P*R;
+    end
 end
-
