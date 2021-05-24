@@ -1,10 +1,12 @@
-function est = fgp_xTV(E, dd, lambda, maxIter, tol)
+function est = fgp_xTV_tL2(E, dd, lambda_x, lambda_t, maxIter, tol)
 %
-%   est = fgp_xTV(E, dd, lambda, [maxIter], [tol])
+%   est = fgp_xTV_tL2(E, dd, lambda_x, lambda_t, [maxIter], [tol])
 %
-%   fgp_xTV 
+%   fgp_xTV_tL2
 %   Spatial Total Variation Constrained Fast Gradient Projection
 %   From Beck & Teboulle, 2009 IEEE Trans Im Proc
+%
+%   With an extra L2 constraint on temporal smoothness
 %
 %   Uses isotropic TV by default
 %   For anisotropic, use the prox_TVL1 subfunction instead
@@ -17,6 +19,8 @@ function est = fgp_xTV(E, dd, lambda, maxIter, tol)
 %   Denoise(X - (2/L)*xfm'*(xfm*X - d), 2*lambda/L)
 %   where L is an upper bound of the Lipschitz constant of 
 %   the gradient of the data consistency term 
+
+%   
 %===========================================================
 %   Initialization
 %===========================================================
@@ -34,7 +38,23 @@ est     =   zeros([E.Nd E.Nt]);
 est0    =   est;
 y       =   zeros(E.msize);
 
-L       =   1/E.max_step(100);
+L       =   1/(E.max_step(100)+lambda_t);
+
+%   Use the power method to find the Lipschitz smoothness
+y   =   randn(E.msize);
+N   =   0;
+ii  =   0;
+while abs(norm(y(:)) - N)/N > 1E-4 && ii < 100
+    N   =   norm(y(:)); 
+    if nargout == 0
+        disp(1./N);
+    end
+    y   =   E.mtimes2(y/N) + reshape(E.R1(reshape(y/N,[E.Nd E.Nt]), [0,0,0, lambda_t]), E.msize);
+    ii  =   ii+1;
+end
+L   =   norm(y(:));
+
+
 iter    =   1;
 t1      =   1;
 update  =   inf;
@@ -48,7 +68,7 @@ update  =   inf;
 fprintf(1, '%-5s %-16s %-16s %-16s\n', 'Iter','L2','TV','Cost');
 while iter <= maxIter && update > tol
 
-    est     =   denoise(reshape(y - (1/L)*(mtimes2(E,y) - dd), [E.Nd, E.Nt]), lambda/L, tv_iters, tv_tol);
+    est     =   denoise(reshape(y - (1/L)*(E.mtimes2(y) + reshape(E.R1(reshape(y,[E.Nd E.Nt]),[0 0 0 lambda_t]), E.msize) - dd), [E.Nd, E.Nt]), lambda_x/L, tv_iters, tv_tol);
 
     %   Accleration
     t2      =   (1+sqrt(1+4*t1^2))/2;
