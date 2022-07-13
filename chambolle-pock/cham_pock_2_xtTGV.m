@@ -1,4 +1,4 @@
-function res = cham_pock_2_xtTGV(d, xfm, niter, lambda_x, lambda_t, tol, step, gamma, plt_fn)
+function res = cham_pock_2_xtTGV(d, E, niter, lambda_x, lambda_t, tol, step, gamma, plt_fn)
 
 %   Mark Chiew
 %   Feb 2018
@@ -34,18 +34,20 @@ if nargin < 9
 plt_fn = [];
 end
 
-u   =   zeros([xfm.Nd(1:3) xfm.Nt],'single');
-uu  =   zeros([xfm.Nd(1:3) xfm.Nt],'single');
-v   =   zeros([xfm.Nd(1:3) xfm.Nt 4],'single');
-vv  =   zeros([xfm.Nd(1:3) xfm.Nt 4],'single');
-p   =   zeros([xfm.Nd(1:3) xfm.Nt 4],'single');
-q   =   zeros([xfm.Nd(1:3) xfm.Nt 10],'single');
-r2  =   zeros([xfm.Nd(1:3) xfm.Nt],'single');
-d   =   reshape(d, [xfm.Nd(1:3) xfm.Nt]);
+u   =   zeros([E.Nd(1:3) E.Nt],'single');
+uu  =   zeros([E.Nd(1:3) E.Nt],'single');
+v   =   zeros([E.Nd(1:3) E.Nt 4],'single');
+vv  =   zeros([E.Nd(1:3) E.Nt 4],'single');
+p   =   zeros([E.Nd(1:3) E.Nt 4],'single');
+q   =   zeros([E.Nd(1:3) E.Nt 10],'single');
+r2  =   zeros([E.Nd(1:3) E.Nt],'single');
+d   =   reshape(d, [E.Nd(1:3) E.Nt]);
 
-h   =   0;                  % this is theta in Chambolle & Pock
-t   =   step/sqrt(12);      % this is tau in Chambolle & Pock
-s   =   step/sqrt(12);      % this is sigma in Chambolle & Pock
+L   =   1/sqrt(E.max_step(10));
+
+h   =   1;                  % this is theta in Chambolle & Pock
+t   =   step/sqrt(L);             % this is tau in Chambolle & Pock
+s   =   step/sqrt(L);             % this is sigma in Chambolle & Pock
 g   =   gamma;              % this is gamma in Chambolle & Pock
 a1  =   1;
 a0  =   2;
@@ -59,7 +61,7 @@ fprintf(1, '%-5s %-16s\n', 'iter','rel. update');
 while iter < niter && update > tol
     p   =   proj(p + s*(grad(u+h*(u-uu),lambda_x,lambda_t) - (v+h*(v-vv))), a1);
     q   =   proj(q + s*symgrad(v+h*(v-vv),lambda_x,lambda_t), a0);
-    r2  =   prox(r2 - s*d + s*reshape(mtimes2(xfm, u+h*(u-uu)),[xfm.Nd(1:3) xfm.Nt]), s, lambda); 
+    r2  =   prox(r2 - s*d + s*reshape(mtimes2(E, u+h*(u-uu)),[E.Nd(1:3) E.Nt]), s, lambda); 
 
     uu  =   u;
     u   =   u + t*(div(p,lambda_x,lambda_t)-r2);
@@ -99,8 +101,8 @@ function x = pgrad(x, dim, Lx, Lt)
 %    0  0 -1  1
 %    0  0  0  0
 
-    Lx = Lx/max(Lx,Lt);
-    Lt = Lt/max(Lx,Lt);
+    %Lx = Lx/max(Lx,Lt);
+    %Lt = Lt/max(Lx,Lt);
 
     if size(x,dim) > 1
         switch dim
@@ -127,8 +129,8 @@ function x = ngrad(x,dim, Lx, Lt)
 %    0 -1  1  0
 %    0  0 -1  0
 
-    Lx = Lx/max(Lx,Lt);
-    Lt = Lt/max(Lx,Lt);
+    %Lx = Lx/max(Lx,Lt);
+    %Lt = Lt/max(Lx,Lt);
 
     if size(x,dim) > 1
         switch dim

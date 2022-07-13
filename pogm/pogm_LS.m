@@ -17,7 +17,7 @@ function [L, S] = pogm_LS(E, dd, lambda_L, lambda_S, im_size, niter)
     
     dd  =   reshape(dd, im_size);
 
-    t   =   E.max_step(10);
+    t   =   E.max_step(100)/2;
 
     a   =   1;  % theta in algorithm
     b   =   1;  % gamma in algorithm
@@ -50,7 +50,6 @@ for iter = 1:niter
 
     L   =   svt(L1, lambda_L);
     S   =   thresh(S1, lambda_S);
-    
     
     %   Display iteration summary data
     fprintf(1, '%-5d -\n', iter);

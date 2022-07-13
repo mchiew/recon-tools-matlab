@@ -1,6 +1,6 @@
-function est = fgp_xTV(E, dd, lambda, maxIter, tol)
+function est = fgp_xTV(E, dd, lambda, maxIter, tol, x0)
 %
-%   est = fgp_xTV(E, dd, lambda, [maxIter], [tol])
+%   est = fgp_xTV(E, dd, lambda, [maxIter], [tol], [x0])
 %
 %   fgp_xTV 
 %   Spatial Total Variation Constrained Fast Gradient Projection
@@ -21,18 +21,27 @@ function est = fgp_xTV(E, dd, lambda, maxIter, tol)
 %   Initialization
 %===========================================================
 if nargin < 6
-    tol =   1E-4;
+    x0  =   [];
 end
 if nargin < 5
+    tol =   1E-4;
+end
+if nargin < 4
     maxIter = 100;
 end
 
 tv_iters    =   100;
 tv_tol      =   1E-6;
 
-est     =   zeros([E.Nd E.Nt]);
-est0    =   est;
-y       =   zeros(E.msize);
+if isempty(x0)
+    est     =   zeros([E.Nd E.Nt]);
+    est0    =   est;
+    y       =   zeros(E.msize);
+else
+    est     =   x0;
+    est0    =   x0;
+    y       =   reshape(x0, E.msize);
+end
 
 L       =   1/E.max_step(100);
 iter    =   1;
@@ -62,6 +71,7 @@ while iter <= maxIter && update > tol
     iter    =   iter + 1;
     est0    =   est;
     t1      =   t2;
+      
 end
 
 
@@ -69,7 +79,7 @@ end
 
 %   Denoising sub-problem
 function y = denoise(x, lambda, iters, tol)
-    p   =   zeros([size(x) 3]);
+    p   =   zeros([size(x,1) size(x,2) size(x,3) size(x,4) 3]);
     p0  =   p;
     r   =   p;
 
@@ -102,7 +112,7 @@ function y = Dfwd(x)
 end
 function y = Dadj(x)
 %   1->2
-    y               =   zeros([size(x) 3]);
+    y               =   zeros([size(x,1) size(x,2) size(x,3) size(x,4) 3]);
     y(:,:,:,:,1)    =   diff(cat(1,x(end,:,:,:),x),1,1);
     y(:,:,:,:,2)    =   diff(cat(2,x(:,end,:,:),x),1,2);
     y(:,:,:,:,3)    =   diff(cat(3,x(:,:,end,:),x),1,3);

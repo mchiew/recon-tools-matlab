@@ -66,7 +66,7 @@ function res = xfm_DFT(dims, coils, fieldmap_struct, k, varargin)
 
     res.E       =   p.DFT;
     if isempty(res.E)
-        [x,y,z] =   meshgrid((0:res.Nd(1)-1) - p.shift(1), (0:res.Nd(2)-1) - p.shift(2), (0:res.Nd(3)-1) - p.shift(3));
+        [y,x,z] =   meshgrid((0:res.Nd(2)-1) - p.shift(2), (0:res.Nd(1)-1) - p.shift(1), (0:res.Nd(3)-1) - p.shift(3));
         res.E   =   zeros(size(k,1),numel(x),res.Nt);
         for t = 1:res.Nt
             if res.Nd(3) > 1    % 3D
@@ -436,7 +436,7 @@ function T = calcToeplitzEmbedding(a)
         T(4*prod(Nd)+4*(i-1)*prod(Nd(1:2))+1:4*prod(Nd)+4*i*prod(Nd(1:2)),:)    =   conj(reshape(M3(:,:,i,:),[],Nt));
     end
 
-    T   =   a.fftfn_ns(reshape(T,[2*Nd Nt]), 1:3);
+    T   =   a.fftfn_ns(reshape(T,[2*Nd Nt]), 1:3)*sqrt(prod(2*Nd));
 
 end
 

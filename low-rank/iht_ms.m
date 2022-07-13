@@ -49,10 +49,9 @@ p.addParamValue('rank',       1,      @isscalar);
 p.addParamValue('step',       0.1,    @isscalar);
 p.addParamValue('shrink',     0.5,    @isscalar);
 p.addParamValue('maxIter',    500,    @isscalar);
-p.addParamValue('tol',        0,      @isscalar);
-p.addParamValue('vPrior',     [],     @(x) size(x,1) == msize(2) || isempty(x));
+p.addParamValue('tol',        1E-4,   @isscalar);
 p.addParamValue('est',        [],     @isstruct);
-p.addParamValue('verbose',    true,   @islogical);
+p.addParamValue('verbose',    false,  @islogical);
 p.addParamValue('accel',      true,   @islogical);
 
 p.parse(xfm, samp, varargin{:});
@@ -62,7 +61,6 @@ shrink      =   p.Results.shrink;
 maxIter     =   p.Results.maxIter;
 tol         =   p.Results.tol;
 ests        =   p.Results.est;
-vPrior      =   p.Results.vPrior;
 verbose     =   p.Results.verbose;
 accel       =   p.Results.accel;
 
@@ -94,13 +92,6 @@ est =   U*V';
 %   Initialize some iteration parameters
 iter    =   1;
 errnorm =   norm(samp(:));
-if ~isempty(vPrior)
-    np  =   size(vPrior,2);
-    r   =   max(r,np);
-else
-    vPrior  =   zeros(nt,1);
-    np      =   0;
-end
 %k_est   =   zeros(size(samp));
 d       =   xfm'*samp;
 y       =   est;
@@ -139,7 +130,7 @@ while iter <= maxIter
     %   Update the error and change metrics
     %err1(iter+1) =   norm(k_est(:)).^2;
     err1(iter+1) =   0;
-    err2(iter+1) =   sum(abs(diag(Sig2))) + sum(abs(norm_prior));
+    err2(iter+1) =   sum(abs(diag(Sig2)));
 
     %   Update the error and change metrics
     update      =   norm(est(:)-est0(:))/norm(est(:));
@@ -165,6 +156,6 @@ while iter <= maxIter
 end
 
 [U, Sig, V] =   lsvd(est,r);
-ests.u      =   [U];
-ests.v      =   [V*Sig];
+ests.u      =   U;
+ests.v      =   V*Sig;
 disp('Finished'); 
