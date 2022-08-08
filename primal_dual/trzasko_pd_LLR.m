@@ -13,29 +13,21 @@ function x = trzasko_pd_LLR(E, dd, lambda, patch_size, im_size, niter)
     x0  =   x;
 
     % y is a collection of all possible patches
-    y   =   zeros([patch_size prod(im_size - patch_size + 1)]);
+    y   =   zeros([patch_size prod(im_size(1:3) - patch_size(1:3) + 1)]);
 
     dd  =   reshape(dd, im_size);
 
-    L   =   1/E.max_step(10);
+    t   =   .5;  % tau
+    s   =   .5;  % sigma
 
-    t   =   1;  % tau
-    s   =   1;  % sigma
-
-    % z is pre-computed tau*E'*dd
-    z   =   t*(E'*dd);
+    % z is pre-computed tau*E'*d
+    z   =   t*dd;
     
     % define patch positions
     [ii,jj,kk]  =   meshgrid(1:im_size(1)-patch_size(1)+1, 1:im_size(2)-patch_size(2)+1, 1:im_size(3)-patch_size(3)+1);
 
-    % get normalization factor
-    N   =   zeros(im_size(1:3));
-    for i = 1:length(ii)
-        N = put_patch(N, ones(patch_size), ii(i), jj(i), kk(i), patch_size);
-    end
-
     % proportion of blocks to update
-    p   =   round(0.1*length(ii));
+    p   =   round(0.05*size(y,5));
     
 
 %   Main loop
@@ -43,18 +35,21 @@ function x = trzasko_pd_LLR(E, dd, lambda, patch_size, im_size, niter)
     for iter = 1:niter
 
         %   x-update
-        x   =   x(:) + z(:);
-        for i = 1:length(ii)
-            x = put_patch(x, -1*y(:,:,:,i), ii(i), jj(i), kk(i), patch_size);
+        
+        x   =   x + z;
+        for i = 1:size(y,5)
+            x = put_patch(x, -1*y(:,:,:,:,i), ii(i), jj(i), kk(i), patch_size);
         end
-        x   =   pcg(@(x)Afun(x, E, t), x(:), 1E-6, 10);
-
+        
+        [x,~] =   pcg(@(x)Afun(x, E, t), x(:), 1E-6, 5, [], [], x(:));
+        x   =   reshape(x, im_size);
+        
         %   y-update
-        idx = randperm(length(ii), p);
+        idx = randperm(size(y,5), p);
         for i = idx
-            y(:,:,:,i) = singular_value_clipping(y(:,:,:,i) + s*get_patch(2*x-x0, ii(i),jj(i),kk(i), patch_size) , lambda/2);
+            y(:,:,:,:,i) = singular_value_clipping(y(:,:,:,:,i) + s*get_patch(2*x-x0, ii(i),jj(i),kk(i), patch_size) , lambda);
         end
-
+        
         x0  =   x;
         
         %   Display iteration summary data
@@ -65,28 +60,28 @@ end
 
 function q = get_patch(X, i, j, k, p)
 
-    [sx,sy,sz,st]   =   size(X);
-    x_idx           =   max(i-(p(1)-1)/2,1):min(i+(p(1)-1)/2,sx);
-    y_idx           =   max(j-(p(2)-1)/2,1):min(j+(p(2)-1)/2,sy);
-    z_idx           =   max(k-(p(3)-1)/2,1):min(k+(p(3)-1)/2,sz);
+    x_idx           =   i:i+p(1)-1;
+    y_idx           =   j:j+p(2)-1;
+    z_idx           =   k:k+p(3)-1;
     q               =   X(x_idx, y_idx, z_idx, :);
+    q               =   padarray(q, [p(1)-length(x_idx),p(2)-length(y_idx),p(3)-length(z_idx),0], 'post');
     
 end
 
 function X = put_patch(X, q, i, j, k, p)
 
-    [sx,sy,sz,st]   =   size(X);
-    x_idx           =   max(i-(p(1)-1)/2,1):min(i+(p(1)-1)/2,sx);
-    y_idx           =   max(j-(p(2)-1)/2,1):min(j+(p(2)-1)/2,sy);
-    z_idx           =   max(k-(p(3)-1)/2,1):min(k+(p(3)-1)/2,sz);
-    X(x_idx, y_idx, z_idx, :) = X(x_idx, y_idx, z_idx, :) + q;
+    x_idx           =   i:i+p(1)-1;
+    y_idx           =   j:j+p(2)-1;
+    z_idx           =   k:k+p(3)-1;
+    X(x_idx, y_idx, z_idx, :) = X(x_idx, y_idx, z_idx, :) + q(1:length(x_idx),1:length(y_idx),1:length(z_idx),:);
 end
 
 
 function q = singular_value_clipping(q, lambda)
-    [u,s,v] =   svd(q, 'econ');
+    sz      =   size(q);
+    [u,s,v] =   svd(reshape(q,[],sz(4)), 'econ');
     s       =   diag(min(diag(s), lambda));
-    q       =   u*s*v';
+    q       =   reshape(u*s*v',sz);
 end
 
 function y = Afun(x, E, tau)
