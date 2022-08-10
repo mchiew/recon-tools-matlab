@@ -12,9 +12,6 @@ function x = trzasko_pd_LLR(E, dd, lambda, patch_size, im_size, niter)
     x   =   zeros(im_size);
     x0  =   x;
 
-    % y is a collection of all possible patches
-    y   =   zeros([patch_size prod(im_size(1:3) - patch_size(1:3) + 1)]);
-
     dd  =   reshape(dd, im_size);
 
     t   =   .5;  % tau
@@ -24,8 +21,11 @@ function x = trzasko_pd_LLR(E, dd, lambda, patch_size, im_size, niter)
     z   =   t*dd;
     
     % define patch positions
-    [ii,jj,kk]  =   meshgrid(1:im_size(1)-patch_size(1)+1, 1:im_size(2)-patch_size(2)+1, 1:im_size(3)-patch_size(3)+1);
+    [ii,jj,kk]  =   meshgrid(-patch_size(1)+2:im_size(1), -patch_size(2)+2:im_size(2), -patch_size(3)+2:im_size(3));
 
+    % y is a collection of all possible patches
+    y   =   zeros([patch_size E.Nt numel(ii)]);    
+    
     % proportion of blocks to update
     p   =   round(0.05*size(y,5));
     
@@ -35,7 +35,6 @@ function x = trzasko_pd_LLR(E, dd, lambda, patch_size, im_size, niter)
     for iter = 1:niter
 
         %   x-update
-        
         x   =   x + z;
         for i = 1:size(y,5)
             x = put_patch(x, -1*y(:,:,:,:,i), ii(i), jj(i), kk(i), patch_size);
@@ -43,13 +42,14 @@ function x = trzasko_pd_LLR(E, dd, lambda, patch_size, im_size, niter)
         
         [x,~] =   pcg(@(x)Afun(x, E, t), x(:), 1E-6, 5, [], [], x(:));
         x   =   reshape(x, im_size);
-        
+
         %   y-update
         idx = randperm(size(y,5), p);
         for i = idx
             y(:,:,:,:,i) = singular_value_clipping(y(:,:,:,:,i) + s*get_patch(2*x-x0, ii(i),jj(i),kk(i), patch_size) , lambda);
         end
-        
+
+	%   save previous x estimate
         x0  =   x;
         
         %   Display iteration summary data
@@ -60,9 +60,10 @@ end
 
 function q = get_patch(X, i, j, k, p)
 
-    x_idx           =   i:i+p(1)-1;
-    y_idx           =   j:j+p(2)-1;
-    z_idx           =   k:k+p(3)-1;
+    sz              =   size(X);
+    x_idx           =   max(i,1):min(i+p(1)-1,sz(1));
+    y_idx           =   max(j,1):min(j+p(2)-1,sz(2));
+    z_idx           =   max(k,1):min(k+p(3)-1,sz(3));
     q               =   X(x_idx, y_idx, z_idx, :);
     q               =   padarray(q, [p(1)-length(x_idx),p(2)-length(y_idx),p(3)-length(z_idx),0], 'post');
     
@@ -70,9 +71,10 @@ end
 
 function X = put_patch(X, q, i, j, k, p)
 
-    x_idx           =   i:i+p(1)-1;
-    y_idx           =   j:j+p(2)-1;
-    z_idx           =   k:k+p(3)-1;
+    sz              =   size(X);
+    x_idx           =   max(i,1):min(i+p(1)-1,sz(1));
+    y_idx           =   max(j,1):min(j+p(2)-1,sz(2));
+    z_idx           =   max(k,1):min(k+p(3)-1,sz(3));
     X(x_idx, y_idx, z_idx, :) = X(x_idx, y_idx, z_idx, :) + q(1:length(x_idx),1:length(y_idx),1:length(z_idx),:);
 end
 
